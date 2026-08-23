@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile, Query, HTTPException, status
+from fastapi import APIRouter, File, UploadFile, Query, status
 from fastapi.responses import JSONResponse
 from app.services.scan_service import process_scan
 from app.db.session import get_scan, list_scans
@@ -14,20 +14,27 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
     "/scan",
     response_model=ScanResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}},
     summary="Upload package label image for compliance scan",
 )
 async def create_scan(image: UploadFile = File(...)):
     if image.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image content-type. Only image/jpeg and image/png are supported.",
+            content=ErrorResponse(
+                error="invalid_image",
+                detail="Invalid image content-type. Only image/jpeg and image/png are supported.",
+            ).model_dump(),
         )
 
     image_bytes = await image.read()
     if len(image_bytes) > MAX_FILE_SIZE:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File size exceeds 10MB limit.",
+            content=ErrorResponse(
+                error="file_too_large",
+                detail="File size exceeds 10MB limit.",
+            ).model_dump(),
         )
 
     filename = image.filename or "scan.jpg"

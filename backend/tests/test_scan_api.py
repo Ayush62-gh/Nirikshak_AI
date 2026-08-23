@@ -37,7 +37,9 @@ def test_post_scan_invalid_content_type():
     response = client.post("/api/scan", files=files)
     assert response.status_code == 400
     data = response.json()
+    assert "error" in data
     assert "detail" in data
+    assert data["error"] == "invalid_image"
     assert "content-type" in data["detail"].lower() or "image" in data["detail"].lower()
 
 
@@ -74,4 +76,6 @@ def test_get_scan_by_invalid_id_returns_404():
     response = client.get(f"/api/scans/{invalid_id}")
     assert response.status_code == 404
     data = response.json()
-    assert "error" in data or "detail" in data
+    assert "error" in data
+    assert "detail" in data
+    assert data["error"] == "Not Found"

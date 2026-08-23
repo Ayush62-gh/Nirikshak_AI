@@ -1,0 +1,26 @@
+{
+  "compliance_thresholds": {
+    "compliant_min_percentage": 90.0,
+    "warning_min_percentage": 70.0,
+    "critical_failure_disqualifies": true
+  },
+  "scoring_weights": {
+    "PASS": 1.0,
+    "WARNING": 0.5,
+    "FAIL": 0.0,
+    "NOT_APPLICABLE": null
+  },
+  "severity_weights": {
+    "CRITICAL": 20,
+    "HIGH": 15,
+    "MEDIUM": 10,
+    "LOW": 5,
+    "INFO": 0
+  },
+  "readability_parameters": {
+    "min_ocr_confidence": 0.60,
+    "min_contrast_ratio": 3.0,
+    "font_size_physical_measurement_required": true,
+    "font_size_measurement_provider": "computer_vision_service"
+  }
+}

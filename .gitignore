@@ -1,0 +1,21 @@
+# Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Databases
+*.db
+*.sqlite3
+
+# Environment configuration
+.env
+
+# Antigravity agent workspace rules/metadata
+.agents/

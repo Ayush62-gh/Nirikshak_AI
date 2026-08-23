@@ -74,7 +74,7 @@ def test_parse_rule_engine_response_fail_case_with_remediation():
                 "ruleId": "R001",
                 "ruleName": "Rule 6 - Net Quantity",
                 "severity": "HIGH",
-                "message": "Net quantity symbol format invalid",
+                "message": "Net quantity symbol format invalid.",
                 "field": "netQuantity",
                 "remediation": "Use standard unit 'g' or 'kg' instead of 'gms'",
             }
@@ -90,6 +90,8 @@ def test_parse_rule_engine_response_fail_case_with_remediation():
     assert v["field"] == "netQuantity"
     assert "Net quantity symbol format invalid" in v["description"]
     assert "Suggested fix: Use standard unit 'g' or 'kg' instead of 'gms'" in v["description"]
+    assert ".." not in v["description"]
+    assert v["description"] == "Net quantity symbol format invalid. Suggested fix: Use standard unit 'g' or 'kg' instead of 'gms'"
 
 
 def test_parse_rule_engine_response_manual_review_case():

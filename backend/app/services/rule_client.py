@@ -59,7 +59,8 @@ def _parse_rule_engine_response(response: dict) -> dict:
         message = v.get("message") or v.get("description") or ""
         remediation = v.get("remediation")
         if remediation:
-            message = f"{message}. Suggested fix: {remediation}" if message else f"Suggested fix: {remediation}"
+            clean_message = message.rstrip(" .")
+            message = f"{clean_message}. Suggested fix: {remediation}" if clean_message else f"Suggested fix: {remediation}"
 
         violations.append({
             "rule": rule_name,

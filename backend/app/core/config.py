@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     RULE_ENGINE_URL: str = "http://localhost:5002"
     PORT: int = 8000
     DATABASE_URL: str = "sqlite:///./app/db/nirikshak.db"
+    use_mock_ocr: bool = True
+    use_mock_rule_engine: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

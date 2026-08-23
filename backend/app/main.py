@@ -3,7 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.session import init_db
-from app.routers import scan
+from app.routers import scan, health
+from app.core.errors import register_exception_handlers
 
 
 @asynccontextmanager
@@ -28,8 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount scan API router
-app.include_router(scan.router, prefix="/api")
+# Register centralized exception handlers
+register_exception_handlers(app)
 
-# TODO (Phase 8): Mount health router here once routers/health.py is implemented
-# app.include_router(health.router, prefix="/api")
+# Mount API routers
+app.include_router(health.router, prefix="/api")
+app.include_router(scan.router, prefix="/api")

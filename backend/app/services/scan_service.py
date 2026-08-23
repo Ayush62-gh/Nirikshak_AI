@@ -1,6 +1,7 @@
 from app.services import ocr_client, rule_client
 from app.db.session import save_scan, get_scan
 from app.schemas.scan_schemas import ScanResponse
+from app.core.errors import ExternalServiceError
 
 
 async def process_scan(image_bytes: bytes, filename: str) -> ScanResponse:
@@ -12,11 +13,16 @@ async def process_scan(image_bytes: bytes, filename: str) -> ScanResponse:
     4. Save record to DB and retrieve updated row
     5. Convert DB row to ScanResponse Pydantic schema
     """
-    # 1. OCR Extraction
-    extracted_fields = await ocr_client.extract_fields(image_bytes, filename)
+    try:
+        # 1. OCR Extraction
+        extracted_fields = await ocr_client.extract_fields(image_bytes, filename)
 
-    # 2. Rule Engine Compliance Validation
-    compliance_result = await rule_client.validate_compliance(extracted_fields)
+        # 2. Rule Engine Compliance Validation
+        compliance_result = await rule_client.validate_compliance(extracted_fields)
+    except ExternalServiceError:
+        raise
+    except Exception as exc:
+        raise ExternalServiceError(f"External service processing failed: {str(exc)}") from exc
 
     # 3. Build flat dictionary structure for database layer
     image_ref = f"uploads/{filename}" if filename else "uploads/scanned_image.jpg"

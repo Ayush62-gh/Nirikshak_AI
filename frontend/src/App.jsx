@@ -5,6 +5,8 @@ import Dashboard from "./pages/Dashboard";
 import NewInspection from "./pages/NewInspection";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
+import RulesGuidelines from "./pages/RulesGuidelines";
+import Settings from "./pages/Settings";
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
           <Route path="/new-inspection" element={<NewInspection />} />
           <Route path="/history" element={<History />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/rules-guidelines" element={<RulesGuidelines />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </DashboardLayout>
     </BrowserRouter>

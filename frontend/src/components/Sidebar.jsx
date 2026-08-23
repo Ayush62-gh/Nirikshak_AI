@@ -29,15 +29,18 @@ const navigationItems = [
     path: "/reports",
   },
 ];
-const bottomItems = [
+ const bottomItems = [
   {
     label: "Rules & Guidelines",
     icon: BookOpen,
+    path: "/rules-guidelines",
   },
   {
     label: "Settings",
     icon: Settings,
+    path: "/settings",
   },
+
 ];
 
 function Sidebar() {
@@ -94,15 +97,22 @@ function Sidebar() {
           {bottomItems.map((item) => {
             const Icon = item.icon;
 
-            return (
-              <button
-                key={item.label}
-                className="flex w-full items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium text-white/80 transition-all duration-200 hover:bg-white/10 hover:text-white"
-              >
-                <Icon size={21} strokeWidth={1.8} />
-                <span>{item.label}</span>
-              </button>
-            );
+           return (
+             <NavLink
+             key={item.label}
+             to={item.path}
+              className={({ isActive }) =>
+           `flex w-full items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition ${
+            isActive
+              ? "bg-teal-600 text-white"
+           : "text-white/80 hover:bg-white/10"
+         }`
+     }
+  >
+    <Icon size={21} strokeWidth={1.8} />
+    <span>{item.label}</span>
+  </NavLink>
+);
           })}
         </div>
       </nav>

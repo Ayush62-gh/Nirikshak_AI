@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, Sun } from "lucide-react";
+import { useLocation } from "react-router-dom";
 function getGreeting() {
   const hour = new Date().getHours();
 
@@ -14,30 +15,34 @@ function getGreeting() {
 }
 
 function Navbar() {
+    const location = useLocation();
+    const isDashboard = location.pathname === "/";
   return (
     <header className="flex min-h-24 items-center justify-between border-b border-[#E2E8F0] bg-white px-8">
-      
-      {/* Greeting */}
-      <div className="flex items-center gap-4">
-        
-        {/* Sun Icon */}
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F0FDFA] text-[#0F766E]">
-          <Sun size={28} strokeWidth={1.8} />
+      {/* Greeting - Dashboard only */}
+       {isDashboard && (
+        <div className="flex items-center gap-4">
+    
+       {/* Sun Icon */}
+         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F0FDFA] text-[#0F766E]">
+        <Sun size={28} strokeWidth={1.8} />
         </div>
 
         <div>
-          <h1 className="text-2xl font-bold text-[#172033]">
-             {getGreeting()}, Inspector
-          </h1>
+        <h1 className="text-2xl font-bold text-[#172033]">
+            {getGreeting()}, Inspector
+        </h1>
 
-          <p className="mt-1 text-sm text-[#64748B]">
-            Here's your compliance overview for today.
-          </p>
-        </div>
-      </div>
+        <p className="mt-1 text-sm text-[#64748B]">
+        Here's your compliance overview for today.
+      </p>
+    </div>
+
+  </div>
+)}
 
       {/* Right Side */}
-      <div className="flex items-center gap-5">
+      <div className="ml-auto flex items-center gap-5">
 
         {/* Notification */}
         <button

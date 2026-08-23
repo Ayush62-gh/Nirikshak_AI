@@ -6,27 +6,29 @@ import {
   BookOpen,
   Settings,
 } from "lucide-react";
-
+import { NavLink } from "react-router-dom";
 const navigationItems = [
   {
     label: "Dashboard",
     icon: LayoutDashboard,
-    active: true,
+    path: "/",
   },
   {
     label: "New Inspection",
     icon: Camera,
+    path: "/new-inspection",
   },
   {
     label: "History",
     icon: History,
+    path: "/history",
   },
   {
     label: "Reports",
     icon: FileText,
+    path: "/reports",
   },
 ];
-
 const bottomItems = [
   {
     label: "Rules & Guidelines",
@@ -66,17 +68,20 @@ function Sidebar() {
             const Icon = item.icon;
 
             return (
-              <button
+              <NavLink
                 key={item.label}
-                className={`flex w-full items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                  item.active
-                    ? "bg-[#0F766E] text-white shadow-sm"
-                    : "text-white/80 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <Icon size={21} strokeWidth={1.8} />
-                <span>{item.label}</span>
-              </button>
+                to={item.path}
+                 className={({ isActive }) =>
+              `flex w-full items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+             isActive
+                ? "bg-[#0F766E] text-white shadow-sm"
+             : "text-white/80 hover:bg-white/10 hover:text-white"
+             }`
+             }
+            >
+            <Icon size={21} strokeWidth={1.8} />
+            <span>{item.label}</span>
+            </NavLink>
             );
           })}
         </div>

@@ -71,6 +71,24 @@ def test_get_scans_list_and_get_by_id():
     assert id_data["product"]["product_name"] == "Sample Biscuits 200g"
 
 
+def test_get_scans_pagination_total_count():
+    fake_image_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00\x48\x00\x48\x00\x00\xFF\xD9"
+    for i in range(3):
+        files = {"image": (f"test_page_{i}.jpg", fake_image_bytes, "image/jpeg")}
+        res = client.post("/api/scan", files=files)
+        assert res.status_code == 201
+
+    response = client.get("/api/scans?page=1&limit=2")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["page"] == 1
+    assert data["limit"] == 2
+    assert len(data["scans"]) == 2
+    assert data["total"] >= 3
+    assert data["total"] > len(data["scans"])
+
+
 def test_get_scan_by_invalid_id_returns_404():
     invalid_id = "non-existent-scan-id-99999"
     response = client.get(f"/api/scans/{invalid_id}")

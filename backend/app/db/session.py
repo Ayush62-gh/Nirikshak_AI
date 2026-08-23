@@ -73,3 +73,13 @@ def list_scans(page: int = 1, limit: int = 20) -> list[dict]:
         return [scan.to_dict() for scan in scans]
     finally:
         db.close()
+
+
+def count_scans() -> int:
+    from app.models.scan import Scan
+
+    db = SessionLocal()
+    try:
+        return db.query(Scan).count()
+    finally:
+        db.close()

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, File, UploadFile, Query, status
 from fastapi.responses import JSONResponse
 from app.services.scan_service import process_scan
-from app.db.session import get_scan, list_scans
+from app.db.session import get_scan, list_scans, count_scans
 from app.schemas.scan_schemas import ScanResponse, ScanListResponse, ErrorResponse
 
 router = APIRouter(tags=["scans"])
@@ -52,11 +52,12 @@ async def get_scans(
 ):
     rows = list_scans(page=page, limit=limit)
     scans = [ScanResponse.from_db_row(row) for row in rows]
+    total_count = count_scans()
     return ScanListResponse(
         scans=scans,
         page=page,
         limit=limit,
-        total=len(scans),
+        total=total_count,
     )
 
 

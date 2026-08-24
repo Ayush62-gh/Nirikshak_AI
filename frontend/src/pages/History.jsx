@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Search,
   CalendarDays,
-  SlidersHorizontal,
   Download,
   FileText,
   CheckCircle2,
@@ -11,56 +10,11 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronLeft,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
+import { getScans } from "../services/api";
 import "../styles/History.css";
-
-const inspections = [
-  {
-    id: "INS-2026-000128",
-    product: "Sunlite Refined Oil",
-    quantity: "1L Pouch",
-    date: "Aug 23, 2026",
-    time: "09:45 PM",
-    status: "Passed",
-    score: "92%",
-  },
-  {
-    id: "INS-2026-000127",
-    product: "Amul Taaza Milk",
-    quantity: "500ml",
-    date: "Aug 23, 2026",
-    time: "07:30 PM",
-    status: "Passed",
-    score: "95%",
-  },
-  {
-    id: "INS-2026-000126",
-    product: "Maggi 2-Minute Noodles",
-    quantity: "70g",
-    date: "Aug 22, 2026",
-    time: "10:15 PM",
-    status: "Warning",
-    score: "68%",
-  },
-  {
-    id: "INS-2026-000125",
-    product: "Parle-G Original",
-    quantity: "250g",
-    date: "Aug 22, 2026",
-    time: "06:50 PM",
-    status: "Passed",
-    score: "89%",
-  },
-  {
-    id: "INS-2026-000124",
-    product: "Coca-Cola Original",
-    quantity: "500ml",
-    date: "Aug 21, 2026",
-    time: "08:20 PM",
-    status: "Failed",
-    score: "45%",
-  },
-];
 
 const statusConfig = {
   Passed: {
@@ -77,20 +31,125 @@ const statusConfig = {
   },
 };
 
+function mapComplianceStatus(status) {
+  switch (status) {
+    case "COMPLIANT":
+      return "Passed";
+    case "PARTIAL":
+      return "Warning";
+    case "NON_COMPLIANT":
+      return "Failed";
+    default:
+      return "Warning";
+  }
+}
+
+function formatTimestamp(isoString) {
+  if (!isoString) return { date: "N/A", time: "N/A" };
+  try {
+    const dateObj = new Date(isoString);
+    if (isNaN(dateObj.getTime())) return { date: "N/A", time: "N/A" };
+
+    const date = dateObj.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    const time = dateObj.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    return { date, time };
+  } catch {
+    return { date: "N/A", time: "N/A" };
+  }
+}
+
 function History() {
+  const [scans, setScans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [total, setTotal] = useState(0);
+
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All Status");
 
-  const filteredInspections = inspections.filter((inspection) => {
-    const matchesSearch =
-      inspection.product.toLowerCase().includes(search.toLowerCase()) ||
-      inspection.id.toLowerCase().includes(search.toLowerCase());
+  useEffect(() => {
+    let isMounted = true;
 
+    async function fetchHistory() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const data = await getScans(page, limit);
+        if (!isMounted) return;
+
+        const scanList = Array.isArray(data.scans)
+          ? data.scans
+          : Array.isArray(data)
+          ? data
+          : [];
+
+        setScans(scanList);
+        setTotal(typeof data.total === "number" ? data.total : scanList.length);
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err.message || "Failed to fetch scan history.");
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [page, limit]);
+
+  // Compute stats summary dynamically from fetched scans
+  const totalCount = total || scans.length;
+  const passedCount = scans.filter(
+    (s) => s.compliance?.status === "COMPLIANT"
+  ).length;
+  const warningCount = scans.filter(
+    (s) => s.compliance?.status === "PARTIAL"
+  ).length;
+  const failedCount = scans.filter(
+    (s) => s.compliance?.status === "NON_COMPLIANT"
+  ).length;
+
+  const passedPct = scans.length > 0 ? ((passedCount / scans.length) * 100).toFixed(1) + "%" : "0%";
+  const warningPct = scans.length > 0 ? ((warningCount / scans.length) * 100).toFixed(1) + "%" : "0%";
+  const failedPct = scans.length > 0 ? ((failedCount / scans.length) * 100).toFixed(1) + "%" : "0%";
+
+  // Filter scans based on search and status select
+  const filteredInspections = scans.filter((scan) => {
+    const productName = scan.product?.product_name || "";
+    const scanId = scan.scan_id || "";
+
+    const matchesSearch =
+      productName.toLowerCase().includes(search.toLowerCase()) ||
+      scanId.toLowerCase().includes(search.toLowerCase());
+
+    const displayStatus = mapComplianceStatus(scan.compliance?.status);
     const matchesStatus =
-      status === "All Status" || inspection.status === status;
+      status === "All Status" || displayStatus === status;
 
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+  const startResult = totalCount === 0 ? 0 : (page - 1) * limit + 1;
+  const endResult = Math.min(page * limit, totalCount);
 
   return (
     <div className="history-page">
@@ -147,7 +206,7 @@ function History() {
           </div>
           <div>
             <span>Total Inspections</span>
-            <strong>128</strong>
+            <strong>{totalCount}</strong>
             <small>All time</small>
           </div>
         </div>
@@ -157,9 +216,9 @@ function History() {
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <span>Passed</span>
-            <strong>98</strong>
-            <small className="green-text">76.6%</small>
+            <span>Passed (This Page)</span>
+            <strong>{passedCount}</strong>
+            <small className="green-text">{passedPct} of current page</small>
           </div>
         </div>
 
@@ -168,9 +227,9 @@ function History() {
             <AlertTriangle size={24} />
           </div>
           <div>
-            <span>Warnings</span>
-            <strong>18</strong>
-            <small className="orange-text">14.1%</small>
+            <span>Warnings (This Page)</span>
+            <strong>{warningCount}</strong>
+            <small className="orange-text">{warningPct} of current page</small>
           </div>
         </div>
 
@@ -179,120 +238,158 @@ function History() {
             <XCircle size={24} />
           </div>
           <div>
-            <span>Failed</span>
-            <strong>12</strong>
-            <small className="red-text">9.3%</small>
+            <span>Failed (This Page)</span>
+            <strong>{failedCount}</strong>
+            <small className="red-text">{failedPct} of current page</small>
           </div>
         </div>
 
       </div>
 
-      {/* Inspection Table */}
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 shadow-sm">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+          <div className="flex-1">
+            <h4 className="font-bold text-red-900">Failed to Load History</h4>
+            <p className="mt-1 text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Inspection Table Card */}
       <div className="inspection-table-card">
 
-        <div className="table-wrapper">
-          <table>
+        {loading ? (
+          <div className="flex items-center justify-center p-12 text-[#71829b] gap-3">
+            <Loader2 size={24} className="animate-spin text-[#2476e8]" />
+            <span className="font-medium text-sm">Loading inspection history...</span>
+          </div>
+        ) : filteredInspections.length === 0 ? (
+          <div className="p-12 text-center">
+            <FileText size={42} className="mx-auto mb-3 text-[#b0c0d4]" />
+            <h3 className="text-base font-bold text-[#142d4c]">No inspections yet</h3>
+            <p className="mt-1 text-sm text-[#71829b]">
+              {scans.length === 0
+                ? "No compliance inspections have been recorded yet."
+                : "No inspection records match your search filter."}
+            </p>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table>
 
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Product</th>
-                <th>Inspection ID</th>
-                <th>Date & Time</th>
-                <th>Status</th>
-                <th>Compliance Score</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Product</th>
+                  <th>Inspection ID</th>
+                  <th>Date & Time</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
 
-            <tbody>
-              {filteredInspections.map((inspection, index) => {
-                const config = statusConfig[inspection.status];
+              <tbody>
+                {filteredInspections.map((scan, index) => {
+                  const displayStatus = mapComplianceStatus(
+                    scan.compliance?.status
+                  );
+                  const config = statusConfig[displayStatus];
+                  const { date, time } = formatTimestamp(scan.timestamp);
 
-                return (
-                  <tr key={inspection.id}>
+                  const displayId = scan.scan_id
+                    ? `Scan #${scan.scan_id.slice(0, 8)}`
+                    : "N/A";
 
-                    <td>{index + 1}</td>
+                  return (
+                    <tr key={scan.scan_id || index}>
 
-                    <td>
-                      <div className="product-info">
-                        <div className="product-placeholder">
-                          <FileText size={18} />
+                      <td>{(page - 1) * limit + index + 1}</td>
+
+                      <td>
+                        <div className="product-info">
+                          <div className="product-placeholder">
+                            <FileText size={18} />
+                          </div>
+
+                          <div>
+                            <strong>
+                              {scan.product?.product_name || "Unknown Product"}
+                            </strong>
+                            <span>{scan.product?.net_quantity || "N/A"}</span>
+                          </div>
                         </div>
+                      </td>
 
-                        <div>
-                          <strong>{inspection.product}</strong>
-                          <span>{inspection.quantity}</span>
+                      <td className="inspection-id">
+                        {displayId}
+                      </td>
+
+                      <td>
+                        <div className="date-info">
+                          <span>{date}</span>
+                          <span>{time}</span>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="inspection-id">
-                      {inspection.id}
-                    </td>
+                      <td>
+                        <span className={`status-badge ${config.className}`}>
+                          {config.icon}
+                          {displayStatus}
+                        </span>
+                      </td>
 
-                    <td>
-                      <div className="date-info">
-                        <span>{inspection.date}</span>
-                        <span>{inspection.time}</span>
-                      </div>
-                    </td>
+                      <td>
+                        <button className="view-btn">
+                          View Details
+                          <ChevronRight size={17} />
+                        </button>
+                      </td>
 
-                    <td>
-                      <span className={`status-badge ${config.className}`}>
-                        {config.icon}
-                        {inspection.status}
-                      </span>
-                    </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
 
-                    <td>
-                      <strong
-                        className={`score ${
-                          inspection.status === "Failed"
-                            ? "score-red"
-                            : inspection.status === "Warning"
-                            ? "score-orange"
-                            : "score-green"
-                        }`}
-                      >
-                        {inspection.score}
-                      </strong>
-                    </td>
-
-                    <td>
-                      <button className="view-btn">
-                        View Details
-                        <ChevronRight size={17} />
-                      </button>
-                    </td>
-
-                  </tr>
-                );
-              })}
-            </tbody>
-
-          </table>
-        </div>
+            </table>
+          </div>
+        )}
 
         {/* Pagination */}
         <div className="pagination">
 
           <span>
-            Showing 1 to {filteredInspections.length} of 128 results
+            Showing {startResult} to {endResult} of {totalCount} results
           </span>
 
           <div className="page-controls">
-            <button>
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className={page <= 1 ? "opacity-50 cursor-not-allowed" : ""}
+            >
               <ChevronLeft size={17} />
             </button>
 
-            <button className="active-page">1</button>
-            <button>2</button>
-            <button>3</button>
-            <span>...</span>
-            <button>26</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              <button
+                key={pageNum}
+                type="button"
+                className={page === pageNum ? "active-page" : ""}
+                onClick={() => setPage(pageNum)}
+              >
+                {pageNum}
+              </button>
+            ))}
 
-            <button>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className={page >= totalPages ? "opacity-50 cursor-not-allowed" : ""}
+            >
               <ChevronRight size={17} />
             </button>
           </div>

@@ -1,7 +1,21 @@
 import React from "react";
 import { User, Save } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 function ProfileSettings() {
+  const { user } = useAuth();
+
+  const fullName = user?.full_name || "Inspector";
+  const email = user?.email || "inspector@nirikshak.gov.in";
+  const initials = fullName
+    ? fullName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "IN";
+
   return (
     <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
@@ -41,12 +55,12 @@ function ProfileSettings() {
         <div className="flex items-center gap-4">
 
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#173b63] text-lg font-bold text-white">
-            IN
+            {initials}
           </div>
 
           <div>
             <h3 className="text-base font-bold text-[#17233d]">
-              Inspector
+              {fullName}
             </h3>
 
             <p className="mt-1 text-sm text-[#6680a3]">
@@ -69,7 +83,8 @@ function ProfileSettings() {
 
           <input
             type="text"
-            defaultValue="Anekvarna"
+            key={fullName}
+            defaultValue={fullName}
             className="h-11 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-[#17233d] outline-none transition focus:border-[#12988d] focus:ring-2 focus:ring-teal-100"
           />
         </div>
@@ -82,7 +97,8 @@ function ProfileSettings() {
 
           <input
             type="email"
-            defaultValue="inspector@nirikshak.ai"
+            key={email}
+            defaultValue={email}
             className="h-11 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-[#17233d] outline-none transition focus:border-[#12988d] focus:ring-2 focus:ring-teal-100"
           />
         </div>

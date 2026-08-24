@@ -1,15 +1,19 @@
+import { useNavigate } from "react-router-dom";
+
 import StatCard from "../components/StatCard";
 import UploadBox from "../components/UploadBox";
 import RecentInspections from "../components/RecentInspections";
 import ComplianceInsights from "../components/ComplianceInsights";
 
 function Dashboard() {
+  const navigate = useNavigate();
+
   return (
     <div className="p-8">
 
       {/* Statistics */}
       <div className="grid grid-cols-4 gap-5">
-        
+
         <StatCard
           type="total"
           title="Total Inspections"
@@ -40,15 +44,26 @@ function Dashboard() {
         />
 
       </div>
+
       {/* New Inspection */}
       <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-        <UploadBox />
+
+        <div
+          onClick={() => navigate("/new-inspection")}
+          className="cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+        >
+          <UploadBox />
+        </div>
+
         <RecentInspections />
+
       </div>
+
       {/* Compliance Insights Section */}
-    <div className="compliance-insights-section">
-     <ComplianceInsights />
-     </div>
+      <div className="compliance-insights-section">
+        <ComplianceInsights />
+      </div>
+
     </div>
   );
 }

@@ -48,7 +48,11 @@ ml_service/
 ├── processed_images/      Generated enhanced images
 ├── annotated_images/      Generated OCR-box images
 ├── tests/
-│   └── test_ocr.py
+│   ├── test_ocr.py
+│   ├── test_api.py
+│   └── test_field_extractor.py
+├── api.py                 FastAPI HTTP wrapper server
+├── field_extractor.py     Structured field parsing layer
 ├── image_processor.py     Complete integration pipeline
 ├── ocr.py                 OCR and annotation functions
 ├── preprocess.py          Image preprocessing functions
@@ -111,6 +115,102 @@ Install the remaining requirements:
 
 ```powershell
 pip install -r requirements.txt
+```
+
+## FastAPI HTTP API Server
+
+Start the FastAPI HTTP service:
+
+```powershell
+uvicorn api:app --host 0.0.0.0 --port 5001
+```
+
+Or run directly via python (reads optional `PORT` environment variable, defaulting to `5001` per `docs/local-setup.md`):
+
+```powershell
+python api.py
+```
+
+> **Note on Performance:** The service pre-loads the `EasyOCR.Reader` model as a singleton at server startup via FastAPI's `lifespan` handler. This eliminates the repeated model-loading overhead on individual `/extract` requests.
+
+### Endpoints
+
+#### 1. `GET /health`
+Returns health status of the service (no external dependencies required).
+
+- **Response:**
+  ```json
+  {
+      "status": "ok"
+  }
+  ```
+
+#### 2. `POST /extract`
+Uploads a product label image and runs the quality check, preprocessing, OCR extraction, and box annotation pipeline.
+
+- **Request Format:** `multipart/form-data`
+- **Field Name:** `"file"`
+
+**Example Curl Command:**
+
+```bash
+curl -X POST "http://localhost:5001/extract" \
+  -F "file=@input_images/catch_label.jpg"
+```
+
+**Example Successful Response (HTTP 200):**
+
+```json
+{
+    "quality": {
+        "blur_score": 125.4,
+        "is_blurry": false,
+        "brightness": 142.0,
+        "quality_status": "ACCEPTABLE"
+    },
+    "full_text": "MRP Rs. 120 Net Wt. 500 g",
+    "text_blocks": [
+        {
+            "text": "MRP Rs. 120",
+            "confidence": 0.94,
+            "box": [
+                [20, 40],
+                [200, 40],
+                [200, 80],
+                [20, 80]
+            ]
+        }
+    ],
+    "processed_image_path": "processed_images/catch_label_processed.jpg",
+    "annotated_image_path": "annotated_images/catch_label_processed_annotated.jpg",
+    "fields": {
+        "productId": null,
+        "productName": "CATCH SPICES",
+        "productType": null,
+        "isImported": false,
+        "manufacturerName": "DS SPICECO PVT LTD",
+        "manufacturerAddress": "Plot No 4, Sector 63, Noida",
+        "packerName": null,
+        "importerName": null,
+        "netQuantity": "500 g",
+        "mrp": "MRP Rs. 120 (incl. of all taxes)",
+        "monthOfPacking": "08",
+        "yearOfPacking": "2026",
+        "consumerCare": "1800-103-1929, care@dsgroup.com",
+        "countryOfOrigin": null,
+        "extraction_confidence": "HIGH"
+    }
+}
+```
+
+**Example Error Response (HTTP 400):**
+
+If a non-image or corrupt file is uploaded:
+
+```json
+{
+    "detail": "Invalid image format: '.txt'. Supported formats: .bmp, .jpeg, .jpg, .png, .webp"
+}
 ```
 
 ## Single-Image Processing

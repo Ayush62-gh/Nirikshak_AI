@@ -5,6 +5,8 @@ import {
   FileText,
   BookOpen,
   Settings,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 const navigationItems = [
@@ -49,8 +51,8 @@ function Sidebar() {
       
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-2xl">
-          ⚖
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white">
+          <ShieldCheck size={26} />
         </div>
 
         <div>
@@ -119,7 +121,9 @@ function Sidebar() {
 
       {/* Trust Card */}
       <div className="mx-4 mb-4 rounded-2xl border border-white/15 bg-white/5 p-3.5">
-        <div className="mb-3 text-2xl">🛡️</div>
+        <div className="mb-3 text-[#0F766E]">
+          <Sparkles size={24} />
+        </div>
 
         <h3 className="text-sm font-semibold">
           AI-Powered Compliance

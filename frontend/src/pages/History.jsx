@@ -50,19 +50,27 @@ function mapComplianceStatus(status) {
 function formatTimestamp(isoString) {
   if (!isoString) return { date: "N/A", time: "N/A" };
   try {
-    const dateObj = new Date(isoString);
+    const str = String(isoString).trim();
+    const normalizedStr =
+      !str.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(str)
+        ? `${str}Z`
+        : str;
+
+    const dateObj = new Date(normalizedStr);
     if (isNaN(dateObj.getTime())) return { date: "N/A", time: "N/A" };
 
     const date = dateObj.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
+      timeZone: "Asia/Kolkata",
     });
 
     const time = dateObj.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Kolkata",
     });
 
     return { date, time };

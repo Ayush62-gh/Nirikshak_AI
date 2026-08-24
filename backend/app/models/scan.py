@@ -22,9 +22,16 @@ class Scan(Base):
     image_ref = Column(String, nullable=True)
 
     def to_dict(self) -> dict:
+        if isinstance(self.timestamp, datetime):
+            ts_str = self.timestamp.isoformat()
+            if not ts_str.endswith("Z") and "+" not in ts_str:
+                ts_str += "Z"
+        else:
+            ts_str = str(self.timestamp) if self.timestamp else None
+
         return {
             "scan_id": self.scan_id,
-            "timestamp": self.timestamp.isoformat() if isinstance(self.timestamp, datetime) else self.timestamp,
+            "timestamp": ts_str,
             "product_name": self.product_name,
             "manufacturer": self.manufacturer,
             "net_quantity": self.net_quantity,

@@ -20,15 +20,15 @@ import { getScans, getScanById } from "../services/api";
 import "../styles/History.css";
 
 const statusConfig = {
-  Passed: {
+  Compliant: {
     className: "status-passed",
     icon: <CheckCircle2 size={15} />,
   },
-  Warning: {
+  Partial: {
     className: "status-warning",
     icon: <AlertTriangle size={15} />,
   },
-  Failed: {
+  "Non-Compliant": {
     className: "status-failed",
     icon: <XCircle size={15} />,
   },
@@ -37,13 +37,13 @@ const statusConfig = {
 function mapComplianceStatus(status) {
   switch (status) {
     case "COMPLIANT":
-      return "Passed";
+      return "Compliant";
     case "PARTIAL":
-      return "Warning";
+      return "Partial";
     case "NON_COMPLIANT":
-      return "Failed";
+      return "Non-Compliant";
     default:
-      return "Warning";
+      return "Partial";
   }
 }
 
@@ -99,14 +99,14 @@ function History() {
         const data = await getScans(page, limit);
         if (!isMounted) return;
 
-        const scanList = Array.isArray(data.scans)
+        const scanList = Array.isArray(data?.scans)
           ? data.scans
           : Array.isArray(data)
           ? data
           : [];
 
         setScans(scanList);
-        setTotal(typeof data.total === "number" ? data.total : scanList.length);
+        setTotal(typeof data?.total === "number" ? data.total : scanList.length);
       } catch (err) {
         if (!isMounted) return;
         setError(err.message || "Failed to fetch scan history.");
@@ -167,10 +167,16 @@ function History() {
   const filteredInspections = scans.filter((scan) => {
     const productName = scan.product?.product_name || "";
     const scanId = scan.scan_id || "";
+    const manufacturer = scan.product?.manufacturer || "";
+    const batchNumber = scan.product?.batch_number || scan.extracted_fields?.batch_number || "";
 
+    const query = search.trim().toLowerCase();
     const matchesSearch =
-      productName.toLowerCase().includes(search.toLowerCase()) ||
-      scanId.toLowerCase().includes(search.toLowerCase());
+      !query ||
+      productName.toLowerCase().includes(query) ||
+      scanId.toLowerCase().includes(query) ||
+      manufacturer.toLowerCase().includes(query) ||
+      batchNumber.toLowerCase().includes(query);
 
     const displayStatus = mapComplianceStatus(scan.compliance?.status);
     const matchesStatus =
@@ -217,9 +223,9 @@ function History() {
           onChange={(e) => setStatus(e.target.value)}
         >
           <option>All Status</option>
-          <option>Passed</option>
-          <option>Warning</option>
-          <option>Failed</option>
+          <option>Compliant</option>
+          <option>Partial</option>
+          <option>Non-Compliant</option>
         </select>
 
         <button className="export-btn">
@@ -248,7 +254,7 @@ function History() {
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <span>Passed (This Page)</span>
+            <span>Compliant (This Page)</span>
             <strong>{passedCount}</strong>
             <small className="green-text">{passedPct} of current page</small>
           </div>
@@ -259,7 +265,7 @@ function History() {
             <AlertTriangle size={24} />
           </div>
           <div>
-            <span>Warnings (This Page)</span>
+            <span>Partial (This Page)</span>
             <strong>{warningCount}</strong>
             <small className="orange-text">{warningPct} of current page</small>
           </div>
@@ -270,7 +276,7 @@ function History() {
             <XCircle size={24} />
           </div>
           <div>
-            <span>Failed (This Page)</span>
+            <span>Non-Compliant (This Page)</span>
             <strong>{failedCount}</strong>
             <small className="red-text">{failedPct} of current page</small>
           </div>
@@ -327,7 +333,7 @@ function History() {
                   const displayStatus = mapComplianceStatus(
                     scan.compliance?.status
                   );
-                  const config = statusConfig[displayStatus];
+                  const config = statusConfig[displayStatus] || statusConfig.Warning;
                   const { date, time } = formatTimestamp(scan.timestamp);
 
                   const displayId = scan.scan_id
@@ -559,13 +565,20 @@ function History() {
                     </div>
 
                     <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+                      <p className="text-xs text-slate-400 font-medium">Batch / Lot Number</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {scanDetails.product?.batch_number || scanDetails.extracted_fields?.batch_number || "Not Declared"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
                       <p className="text-xs text-slate-400 font-medium">Month & Year of Mfg / Packing</p>
                       <p className="mt-1 font-semibold text-slate-800">
                         {scanDetails.product?.mfg_date || scanDetails.extracted_fields?.mfg_date || "Not Declared"}
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs sm:col-span-2">
                       <p className="text-xs text-slate-400 font-medium">Consumer Care Details</p>
                       <p className="mt-1 font-semibold text-slate-800">
                         {scanDetails.product?.consumer_care || scanDetails.extracted_fields?.consumer_care || "Not Declared"}
@@ -573,6 +586,18 @@ function History() {
                     </div>
                   </div>
                 </div>
+
+                {/* Raw OCR Text Section */}
+                {scanDetails.extracted_fields?.raw_ocr_text && (
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Extracted Raw OCR Text
+                    </h3>
+                    <div className="max-h-36 overflow-y-auto rounded-xl bg-slate-900 p-3.5 text-xs text-slate-200 font-mono leading-relaxed border border-slate-800">
+                      {scanDetails.extracted_fields.raw_ocr_text}
+                    </div>
+                  </div>
+                )}
 
                 {/* Violations List Section */}
                 <div>

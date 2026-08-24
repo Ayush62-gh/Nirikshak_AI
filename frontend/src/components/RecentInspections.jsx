@@ -1,49 +1,50 @@
-import { ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronRight, FileText, Loader2 } from "lucide-react";
 
-const inspections = [
-  {
-    id: "LMC-00124",
-    product: "Premium Tea",
-    status: "Non-Compliant",
-    score: "72/100",
-    date: "23 Aug 2026",
-    image: "/products/tea.jpeg",
-  },
-  {
-    id: "LMC-00123",
-    product: "Refined Sugar",
-    status: "Compliant",
-    score: "96/100",
-    date: "23 Aug 2026",
-    image: "/products/sugar.png",
-  },
-  {
-    id: "LMC-00122",
-    product: "Digestive Biscuits",
-    status: "Non-Compliant",
-    score: "45/100",
-    date: "22 Aug 2026",
-    image: "/products/biscuits.jpeg",
-  },
-  {
-    id: "LMC-00121",
-    product: "Sunflower Oil",
-    status: "Compliant",
-    score: "93/100",
-    date: "22 Aug 2026",
-    image: "/products/oil.png",
-  },
-  {
-    id: "LMC-00120",
-    product: "Wheat Flour",
-    status: "Under Review",
-    score: "—",
-    date: "21 Aug 2026",
-    image: "/products/flour.jpeg",
-  },
-];
+function formatTimestamp(isoString) {
+  if (!isoString) return "N/A";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return isoString;
+  }
+}
 
-function RecentInspections() {
+function mapStatusConfig(status) {
+  switch (status) {
+    case "COMPLIANT":
+      return {
+        label: "Compliant",
+        className: "bg-[#ECFDF5] text-[#059669]",
+        scoreText: "100/100",
+        scoreClass: "text-[#059669]",
+      };
+    case "NON_COMPLIANT":
+      return {
+        label: "Non-Compliant",
+        className: "bg-[#FEF2F2] text-[#DC2626]",
+        scoreText: "FAIL",
+        scoreClass: "text-[#DC2626]",
+      };
+    default:
+      return {
+        label: "Under Review",
+        className: "bg-[#FFF7ED] text-[#EA580C]",
+        scoreText: "REVIEW",
+        scoreClass: "text-[#EA580C]",
+      };
+  }
+}
+
+function RecentInspections({ scans = [], loading = false, error = null }) {
+  const navigate = useNavigate();
+
   return (
     <div className="min-w-0 rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
 
@@ -53,77 +54,89 @@ function RecentInspections() {
           Recent Inspections
         </h2>
 
-        <button className="flex items-center gap-1 text-sm font-semibold text-[#0F766E] hover:text-[#0B625C]">
+        <button
+          onClick={() => navigate("/history")}
+          className="flex items-center gap-1 text-sm font-semibold text-[#0F766E] hover:text-[#0B625C] transition-colors"
+        >
           View All
           <ChevronRight size={17} />
         </button>
       </div>
 
-      {/* Inspection List */}
-      <div className="divide-y divide-[#EEF2F6]">
-        {inspections.map((inspection) => (
-  <div
-    key={inspection.id}
-    className="grid grid-cols-[48px_minmax(50px,1fr)_auto_65px_82px_18px] items-center gap-3 border-b border-[#EEF2F6] py-3 last:border-b-0"
-  >
-    {/* Product Image */}
-    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-[#F8FAFC]">
-      <img
-        src={inspection.image}
-        alt={inspection.product}
-        className="h-full w-full object-contain"
-      />
-    </div>
+      {/* Content Area */}
+      {loading ? (
+        <div className="flex items-center justify-center p-8 text-[#64748B] gap-3">
+          <Loader2 size={20} className="animate-spin text-[#0F766E]" />
+          <span className="text-sm font-medium">Loading recent inspections...</span>
+        </div>
+      ) : scans.length === 0 ? (
+        <div className="p-8 text-center">
+          <FileText size={36} className="mx-auto mb-2 text-[#94A3B8]" />
+          <p className="text-sm font-semibold text-[#172033]">No inspections recorded yet</p>
+          <p className="mt-1 text-xs text-[#64748B]">
+            Start a new inspection scan to see compliance results here.
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-[#EEF2F6]">
+          {scans.map((scan, index) => {
+            const rawStatus = scan.compliance?.status;
+            const config = mapStatusConfig(rawStatus);
+            const dateStr = formatTimestamp(scan.timestamp);
+            const displayId = scan.scan_id
+              ? `LMC-${scan.scan_id.slice(0, 5).toUpperCase()}`
+              : `LMC-00${index + 1}`;
 
-    {/* Product */}
-    <div className="min-w-0">
-      <p className="text-sm font-semibold text-[#172033]">
-        {inspection.product}
-      </p>
+            return (
+              <div
+                key={scan.scan_id || index}
+                onClick={() => navigate("/history")}
+                className="grid grid-cols-[48px_minmax(50px,1fr)_auto_65px_82px_18px] items-center gap-3 border-b border-[#EEF2F6] py-3 last:border-b-0 cursor-pointer hover:bg-slate-50/50 transition-colors"
+              >
+                {/* Product Image Placeholder */}
+                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-[#F8FAFC] text-[#64748B]">
+                  <FileText size={20} />
+                </div>
 
-      <p className="mt-0.5 whitespace-nowrap text-xs text-[#64748B]">
-        {inspection.id}
-      </p>
-    </div>
+                {/* Product Info */}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#172033] truncate">
+                    {scan.product?.product_name || "Unknown Product"}
+                  </p>
 
-    {/* Status */}
-    <span
-      className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-semibold ${
-        inspection.status === "Compliant"
-          ? "bg-[#ECFDF5] text-[#059669]"
-          : inspection.status === "Non-Compliant"
-          ? "bg-[#FEF2F2] text-[#DC2626]"
-          : "bg-[#FFF7ED] text-[#EA580C]"
-      }`}
-    >
-      {inspection.status}
-    </span>
+                  <p className="mt-0.5 whitespace-nowrap text-xs text-[#64748B]">
+                    {displayId}
+                  </p>
+                </div>
 
-    {/* Score */}
-    <span
-      className={`text-right text-sm font-bold ${
-        inspection.status === "Compliant"
-          ? "text-[#059669]"
-          : inspection.status === "Non-Compliant"
-          ? "text-[#DC2626]"
-          : "text-[#94A3B8]"
-      }`}
-    >
-      {inspection.score}
-    </span>
+                {/* Status Badge */}
+                <span
+                  className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-semibold ${config.className}`}
+                >
+                  {config.label}
+                </span>
 
-    {/* Date */}
-    <span className="text-right text-[10px] whitespace-nowrap text-[#64748B]">
-      {inspection.date}
-    </span>
+                {/* Score */}
+                <span
+                  className={`text-right text-sm font-bold ${config.scoreClass}`}
+                >
+                  {config.scoreText}
+                </span>
 
-    {/* Arrow */}
-    <button className="flex justify-end text-[#94A3B8] hover:text-[#12355B]">
-      <ChevronRight size={18} />
-    </button>
-  </div>
-))}
-      </div>
+                {/* Date */}
+                <span className="text-right text-[10px] whitespace-nowrap text-[#64748B]">
+                  {dateStr}
+                </span>
+
+                {/* Arrow */}
+                <div className="flex justify-end text-[#94A3B8]">
+                  <ChevronRight size={18} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
     </div>
   );

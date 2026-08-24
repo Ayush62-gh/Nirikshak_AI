@@ -141,6 +141,9 @@ export async function submitScan(imageFile) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/scan`, {
       method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+      },
       body: formData,
     });
 
@@ -168,7 +171,12 @@ export async function submitScan(imageFile) {
 export async function getScans(page = 1, limit = 20) {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/scans?page=${page}&limit=${limit}`
+      `${API_BASE_URL}/api/scans?page=${page}&limit=${limit}`,
+      {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }
     );
 
     if (!response.ok) {
@@ -194,7 +202,11 @@ export async function getScans(page = 1, limit = 20) {
  */
 export async function getScanById(scanId) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/scans/${scanId}`);
+    const response = await fetch(`${API_BASE_URL}/api/scans/${scanId}`, {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
 
     if (!response.ok) {
       const fallbackMsg =

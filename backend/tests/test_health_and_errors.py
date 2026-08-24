@@ -8,6 +8,21 @@ from app.core.errors import ExternalServiceError
 client = TestClient(app, raise_server_exceptions=False)
 
 
+def get_auth_header():
+    user_payload = {
+        "email": "health_tester@nirikshak.gov.in",
+        "password": "Password123!",
+        "full_name": "Health Tester",
+    }
+    reg = client.post("/api/auth/register", json=user_payload)
+    if reg.status_code == 201:
+        token = reg.json()["access_token"]
+    else:
+        login = client.post("/api/auth/login", json={"email": user_payload["email"], "password": user_payload["password"]})
+        token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_get_health_endpoint():
     response = client.get("/api/health")
     assert response.status_code == 200
@@ -15,7 +30,8 @@ def test_get_health_endpoint():
 
 
 def test_request_validation_error_custom_format():
-    response = client.get("/api/scans?page=abc")
+    headers = get_auth_header()
+    response = client.get("/api/scans?page=abc", headers=headers)
     assert response.status_code == 422
     data = response.json()
 
@@ -26,6 +42,8 @@ def test_request_validation_error_custom_format():
 
 
 def test_external_service_error_handling(monkeypatch):
+    headers = get_auth_header()
+
     async def mock_failed_extract(*args, **kwargs):
         raise ExternalServiceError("OCR engine connection timed out")
 
@@ -34,7 +52,7 @@ def test_external_service_error_handling(monkeypatch):
     fake_image_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00\x48\x00\x48\x00\x00\xFF\xD9"
     files = {"image": ("test.jpg", fake_image_bytes, "image/jpeg")}
 
-    response = client.post("/api/scan", files=files)
+    response = client.post("/api/scan", files=files, headers=headers)
     assert response.status_code == 502
     data = response.json()
 
@@ -44,12 +62,14 @@ def test_external_service_error_handling(monkeypatch):
 
 
 def test_generic_500_exception_handler_no_traceback_leak(monkeypatch):
+    headers = get_auth_header()
+
     def mock_db_crash(*args, **kwargs):
         raise RuntimeError("Secret DB Password or raw internal stack trace details!")
 
     monkeypatch.setattr(routers.scan, "list_scans", mock_db_crash)
 
-    response = client.get("/api/scans")
+    response = client.get("/api/scans", headers=headers)
     assert response.status_code == 500
     data = response.json()
 

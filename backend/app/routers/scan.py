@@ -1,8 +1,10 @@
-from fastapi import APIRouter, File, UploadFile, Query, status
+from fastapi import APIRouter, File, UploadFile, Query, status, Depends
 from fastapi.responses import JSONResponse
 from app.services.scan_service import process_scan
 from app.db.session import get_scan, list_scans, count_scans
 from app.schemas.scan_schemas import ScanResponse, ScanListResponse, ErrorResponse
+from app.models.user import User
+from app.routers.auth import get_current_user
 
 router = APIRouter(tags=["scans"])
 
@@ -17,7 +19,10 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/jpg"}
     responses={400: {"model": ErrorResponse}},
     summary="Upload package label image for compliance scan",
 )
-async def create_scan(image: UploadFile = File(...)):
+async def create_scan(
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
     if image.content_type not in ALLOWED_CONTENT_TYPES:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -49,6 +54,7 @@ async def create_scan(image: UploadFile = File(...)):
 async def get_scans(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
 ):
     rows = list_scans(page=page, limit=limit)
     scans = [ScanResponse.from_db_row(row) for row in rows]
@@ -67,7 +73,10 @@ async def get_scans(
     responses={404: {"model": ErrorResponse}},
     summary="Get scan by ID",
 )
-async def get_scan_by_id(scan_id: str):
+async def get_scan_by_id(
+    scan_id: str,
+    current_user: User = Depends(get_current_user),
+):
     row = get_scan(scan_id)
     if not row:
         return JSONResponse(
@@ -78,3 +87,4 @@ async def get_scan_by_id(scan_id: str):
             ).model_dump(),
         )
     return ScanResponse.from_db_row(row)
+

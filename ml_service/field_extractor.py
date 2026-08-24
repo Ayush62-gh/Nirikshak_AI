@@ -9,13 +9,25 @@ MONTH_MAP = {
     "october": "10", "november": "11", "december": "12"
 }
 
+DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+
+
+def _normalize_text(text: str) -> str:
+    """Translates Devanagari digits to ASCII digits and cleans whitespace."""
+    if not text:
+        return ""
+    return text.translate(DEVANAGARI_DIGITS)
+
 
 def _extract_mrp(text_blocks, full_text):
     """
     Extracts MRP string preserving surrounding context (e.g. 'MRP Rs. 45.00 (incl. of all taxes)').
+    Tolerates OCR misspellings like 'Pnce' for 'Price' or 'Maximum Retail Pnce'.
     """
     mrp_pattern = re.compile(
-        r'(?:MRP|M\.R\.P\.?|Rs\.?|₹)\s*[:\.-]?\s*(?:Rs\.?|₹)?\s*\d+(?:\.\d{1,2})?(?:\s*\(?[^\n\r]*incl[^\n\r]*\)?)?',
+        r'(?:MRP|M\.?\s*R\.?\s*P\.?|Max(?:imum)?\s*Ret(?:ail)?\s*P[a-z]{1,4}e?|Ret(?:ail)?\s*P[a-z]{1,4}e?|Rs\.?|₹|INR)'
+        r'\s*[:\.-]?\s*(?:Rs\.?|₹|INR)?\s*\d+(?:[\.,]\d{1,2}|\s+\d{2})?'
+        r'(?:\s*\(?[^\n\r]*(?:incl|inclusive)[^\n\r]*\)?)?',
         re.IGNORECASE
     )
 
@@ -40,7 +52,12 @@ def _extract_net_quantity(text_blocks, full_text):
     Extracts Net Quantity string (e.g. '200 g', '1.5 L', '500g', 'Net Wt: 500 g').
     """
     qty_pattern = re.compile(
-        r'(?:Net\s*(?:Qty|Quantity|Wt|Weight)\s*[:\.-]?\s*)?(\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|g\.?|kg\.?|ml\.?|l\.?))\b',
+        r'(?:Net\s*(?:Qty|Quantity|Wt|Weight|Vol|Volume|Content|Contents)|Nett\s*(?:Qty|Quantity|Wt|Weight))\s*[:\.-]?\s*'
+        r'(\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|gram|grams|g\.?|kg\.?|ml\.?|l\.?|ltr|liter|litres|liters|pcs|units|n))\b',
+        re.IGNORECASE
+    )
+    generic_qty_pattern = re.compile(
+        r'\b(\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|gram|grams|kg\.?|ml\.?|ltr|liter|litres|liters))\b',
         re.IGNORECASE
     )
 
@@ -54,15 +71,31 @@ def _extract_net_quantity(text_blocks, full_text):
     if match:
         return match.group(1).strip()
 
+    # Fallback to generic quantity search
+    for block in text_blocks:
+        txt = block.get("text", "").strip()
+        match = generic_qty_pattern.search(txt)
+        if match and not any(kw in txt.lower() for kw in ["mrp", "rs", "₹", "date", "batch", "lot"]):
+            return match.group(1).strip()
+
+    match = generic_qty_pattern.search(full_text)
+    if match:
+        return match.group(1).strip()
+
     return None
 
 
 def _extract_manufacturer(text_blocks, full_text):
     """
     Extracts manufacturer name and optional address.
+    Tolerates 'Registered Address', 'Regd. Office', 'Factory Address', etc.
     """
     mfg_pattern = re.compile(
-        r'(?:Manufactured\s+by|Mfg\s+by|Mfd\s+by|Packed\s+by|Pkd\s+by|Marketed\s+by|Mkd\s+by)\s*[:\.-]?\s*(.+)',
+        r'(?:Manufactured\s+(?:by|in)|Mfg\s+by|Mfd\s+by|Packed\s+by|Pkd\s+by|Marketed\s+by|Mkd\s+by|Manufacturer\s*[:\.-]|Packer\s*[:\.-])\s*[:\.-]?\s*(.+)',
+        re.IGNORECASE
+    )
+    addr_pattern = re.compile(
+        r'(?:Registered\s+Address|Regd\.?\s+(?:Address|Office)|Factory\s+Address|Mfg\.\s+Address|Plant\s+Address|Address|Corp\.?\s+Office)\s*[:\.-]?\s*(.+)',
         re.IGNORECASE
     )
 
@@ -87,10 +120,27 @@ def _extract_manufacturer(text_blocks, full_text):
                 candidate = blocks_text[i + 1].strip()
                 if candidate != name and any(
                     kw in candidate.lower()
-                    for kw in ["road", "street", "ind", "area", "dist", "state", "pin", "plot", "no", "nagar", "sector", "post"]
+                    for kw in ["road", "street", "ind", "area", "dist", "state", "pin", "plot", "no", "nagar", "sector", "post", "bhavan", "building"]
                 ):
                     address = candidate
             break
+
+    # Look for explicit registered/factory address header if address is still None
+    if not address:
+        for line in blocks_text:
+            match = addr_pattern.search(line)
+            if match:
+                extracted_addr = match.group(1).strip()
+                if extracted_addr:
+                    address = extracted_addr
+                else:
+                    address = line
+                break
+
+    if not address and full_text:
+        match = addr_pattern.search(full_text)
+        if match:
+            address = match.group(1).split("\n")[0].strip()
 
     if not name and full_text:
         match = mfg_pattern.search(full_text)
@@ -102,10 +152,13 @@ def _extract_manufacturer(text_blocks, full_text):
 
 def _extract_dates(text_blocks, full_text):
     """
-    Extracts month and year of packing.
+    Extracts month and year of packing / manufacture.
+    Tolerates OCR typos like 'Manuiaclure' for 'Manufacture'.
     """
     date_pattern = re.compile(
-        r'(?:Mfg|Mfd|Packed|Pkd|DOM|Date\s+of\s+(?:Mfg|Packing))\s*[:\.-]?\s*(?:([0-3]?\d)[\/\.\-\s]+)?([0-1]?\d|[a-zA-Z]{3,9})[\/\.\-\s]+(\d{2,4})',
+        r'(?:(?:Month\s*(?:and|&)?\s*Year\s*of|Date\s*of|Month/Year\s*of)\s*)?'
+        r'(?:Manui[a-z]+|Manuf[a-z]*|Mfg|Mfd|Pack[a-z]*|Pkd|DOM|DOP|Packing|Manufacture)\s*[:\.-]?\s*'
+        r'(?:([0-3]?\d)[\/\.\-\s]+)?([0-1]?\d|[a-zA-Z]{3,9})[\/\.\-\s]+(20\d{2}|\d{2,4})',
         re.IGNORECASE
     )
 
@@ -117,17 +170,10 @@ def _extract_dates(text_blocks, full_text):
     combined_text = " ".join([b.get("text", "") for b in text_blocks]) or full_text
 
     match = date_pattern.search(combined_text)
-    if not match:
-        match = generic_pattern.search(combined_text)
-
     if match:
         groups = match.groups()
-        if len(groups) == 3:
-            m_raw = groups[1]
-            y_raw = groups[2]
-        else:
-            m_raw = groups[0]
-            y_raw = groups[1]
+        m_raw = groups[1]
+        y_raw = groups[2]
 
         # Process month
         m_str = str(m_raw).strip().lower()
@@ -146,6 +192,19 @@ def _extract_dates(text_blocks, full_text):
             year = y_str
 
         return month, year
+
+    match = generic_pattern.search(combined_text)
+    if match:
+        groups = match.groups()
+        m_raw = groups[0]
+        y_raw = groups[1]
+
+        m_str = str(m_raw).strip().lower()
+        if m_str in MONTH_MAP or m_str.isdigit():
+            month = MONTH_MAP.get(m_str, f"{int(m_str):02d}" if m_str.isdigit() else m_str.upper())
+            y_str = str(y_raw).strip()
+            year = f"20{y_str}" if len(y_str) == 2 else y_str
+            return month, year
 
     return None, None
 
@@ -240,8 +299,15 @@ def extract_fields(ocr_result: dict) -> dict:
     quality = ocr_result.get("quality") or {}
     quality_status = quality.get("quality_status", "ACCEPTABLE")
 
-    full_text = ocr_result.get("full_text", "") or ""
-    text_blocks = ocr_result.get("text_blocks", []) or []
+    raw_full_text = ocr_result.get("full_text", "") or ""
+    raw_text_blocks = ocr_result.get("text_blocks", []) or []
+
+    # Normalize Devanagari digits to ASCII digits
+    full_text = _normalize_text(raw_full_text)
+    text_blocks = [
+        {**b, "text": _normalize_text(b.get("text", ""))}
+        for b in raw_text_blocks
+    ]
 
     # Field Extractions
     mrp = _extract_mrp(text_blocks, full_text)
@@ -273,3 +339,4 @@ def extract_fields(ocr_result: dict) -> dict:
         "countryOfOrigin": None,
         "extraction_confidence": confidence_flag
     }
+

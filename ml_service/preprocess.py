@@ -9,7 +9,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 SUPPORTED_FORMATS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
-MAX_IMAGE_DIMENSION = 1800
+MAX_IMAGE_DIMENSION = 800
 MAX_TILT_ANGLE = 10.0
 
 

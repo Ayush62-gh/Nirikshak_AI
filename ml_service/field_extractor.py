@@ -19,15 +19,38 @@ def _normalize_text(text: str) -> str:
     return text.translate(DEVANAGARI_DIGITS)
 
 
+MRP_BOUNDARIES_RE = re.compile(
+    r'(?i)\s*(?:Registered|Regd|Factory|Mfg|Mfd|Packed|Pkd|Marketed|Mkd|For\s+customer|Customer\s*Care|Telephone|Phone|Tel|Email|Contact|Address|Net\s*Qty|Net\s*Wt|Batch|Date|EAN|UPC|Model|Imported|Month|Year|Country)\b'
+)
+
+COMPANY_SUFFIX_PATTERN = re.compile(
+    r'^(.*?Pvt\.?\s*Ltd\.?|.*?Private\s+Limited|.*?Ltd\.?|.*?Limited|.*?Inc\.?|.*?LLP|.*?Corp\.?|.*?Corporation|.*?Industries|.*?Solutions|.*?Enterprises|.*?Foods)\s*(.*)$',
+    re.IGNORECASE
+)
+
+ADDRESS_KEYWORDS = [
+    "road", "street", "ind", "area", "dist", "state", "pin", "pincode",
+    "plot", "no", "nagar", "sector", "post", "bhavan", "building", "floor",
+    "mouza", "city", "flat", "lane", "marg", "colony", "pradesh", "bengal",
+    "maharashtra", "karnataka", "delhi", "haryana", "gujarat", "tamil nadu",
+    "telangana", "kerala", "punjab", "nh-", "po", "tq", "distt", "howrah"
+]
+
+BOUNDARY_KEYWORDS_RE = re.compile(
+    r'(?i)\s*(?:For\s+customer|Customer\s*Care|Care\s*Cell|Telephone|Phone|Tel|Email|Contact|Net\s*Qty|Net\s*Wt|Batch|EAN|UPC|Model|Imported|Month\s*and\s*Year|Month|Date)\b'
+)
+
+
 def _extract_mrp(text_blocks, full_text):
     """
     Extracts MRP string preserving surrounding context (e.g. 'MRP Rs. 45.00 (incl. of all taxes)').
     Tolerates OCR misspellings like 'Pnce' for 'Price' or 'Maximum Retail Pnce'.
+    Prevents over-capturing across flat OCR strings.
     """
     mrp_pattern = re.compile(
         r'(?:MRP|M\.?\s*R\.?\s*P\.?|Max(?:imum)?\s*Ret(?:ail)?\s*P[a-z]{1,4}e?|Ret(?:ail)?\s*P[a-z]{1,4}e?|Rs\.?|₹|INR)'
         r'\s*[:\.-]?\s*(?:Rs\.?|₹|INR)?\s*\d+(?:[\.,]\d{1,2}|\s+\d{2})?'
-        r'(?:\s*\(?[^\n\r]*(?:incl|inclusive)[^\n\r]*\)?)?',
+        r'(?:\s*\(?\s*(?:incl|inclusive)[^()\n\r]{0,35}(?:taxes?|tax)?\s*\)?)?',
         re.IGNORECASE
     )
 
@@ -35,13 +58,21 @@ def _extract_mrp(text_blocks, full_text):
         txt = block.get("text", "").strip()
         match = mrp_pattern.search(txt)
         if match:
-            return txt
+            extracted = match.group(0).strip()
+            # Truncate at boundary keyword if present in block text after match
+            after_start = match.start() + len(match.group(0))
+            b_match = MRP_BOUNDARIES_RE.search(txt[match.start():])
+            if b_match and b_match.start() > 0:
+                extracted = txt[match.start():match.start() + b_match.start()].strip()
+            return extracted
 
     match = mrp_pattern.search(full_text)
     if match:
         start = match.start()
-        # Find context line
         line = full_text[start:].splitlines()[0].strip()
+        b_match = MRP_BOUNDARIES_RE.search(line)
+        if b_match and b_match.start() > 0:
+            line = line[:b_match.start()].strip()
         return line
 
     return None
@@ -89,6 +120,7 @@ def _extract_manufacturer(text_blocks, full_text):
     """
     Extracts manufacturer name and optional address.
     Tolerates 'Registered Address', 'Regd. Office', 'Factory Address', etc.
+    Prevents assigning company name as manufacturerAddress.
     """
     mfg_pattern = re.compile(
         r'(?:Manufactured\s+(?:by|in)|Mfg\s+by|Mfd\s+by|Packed\s+by|Pkd\s+by|Marketed\s+by|Mkd\s+by|Manufacturer\s*[:\.-]|Packer\s*[:\.-])\s*[:\.-]?\s*(.+)',
@@ -110,37 +142,79 @@ def _extract_manufacturer(text_blocks, full_text):
         match = mfg_pattern.search(line)
         if match:
             extracted = match.group(1).strip()
+            b_match = BOUNDARY_KEYWORDS_RE.search(extracted)
+            if b_match:
+                extracted = extracted[:b_match.start()].strip()
             if extracted:
                 name = extracted
             elif i + 1 < len(blocks_text):
                 name = blocks_text[i + 1].strip()
 
-            # Address extraction from subsequent line if available
             if i + 1 < len(blocks_text):
                 candidate = blocks_text[i + 1].strip()
                 if candidate != name and any(
-                    kw in candidate.lower()
-                    for kw in ["road", "street", "ind", "area", "dist", "state", "pin", "plot", "no", "nagar", "sector", "post", "bhavan", "building"]
+                    kw in candidate.lower() for kw in ADDRESS_KEYWORDS
                 ):
                     address = candidate
             break
 
-    # Look for explicit registered/factory address header if address is still None
-    if not address:
-        for line in blocks_text:
+    if not address or not name:
+        for i, line in enumerate(blocks_text):
             match = addr_pattern.search(line)
             if match:
-                extracted_addr = match.group(1).strip()
-                if extracted_addr:
-                    address = extracted_addr
+                raw_extracted = match.group(1).strip()
+                b_match = BOUNDARY_KEYWORDS_RE.search(raw_extracted)
+                if b_match:
+                    raw_extracted = raw_extracted[:b_match.start()].strip()
+
+                comp_match = COMPANY_SUFFIX_PATTERN.search(raw_extracted)
+                if comp_match:
+                    comp_name = comp_match.group(1).strip()
+                    remainder_addr = comp_match.group(2).strip()
+
+                    if not name:
+                        name = comp_name
+
+                    if remainder_addr and any(kw in remainder_addr.lower() for kw in ADDRESS_KEYWORDS):
+                        address = remainder_addr
+                    elif i + 1 < len(blocks_text):
+                        next_line = blocks_text[i + 1].strip()
+                        nb_match = BOUNDARY_KEYWORDS_RE.search(next_line)
+                        if nb_match:
+                            next_line = next_line[:nb_match.start()].strip()
+                        if any(kw in next_line.lower() for kw in ADDRESS_KEYWORDS):
+                            address = next_line
                 else:
-                    address = line
+                    if any(kw in raw_extracted.lower() for kw in ADDRESS_KEYWORDS):
+                        address = raw_extracted
+                    else:
+                        if not name and raw_extracted:
+                            name = raw_extracted
+                        if i + 1 < len(blocks_text):
+                            next_line = blocks_text[i + 1].strip()
+                            nb_match = BOUNDARY_KEYWORDS_RE.search(next_line)
+                            if nb_match:
+                                next_line = next_line[:nb_match.start()].strip()
+                            if any(kw in next_line.lower() for kw in ADDRESS_KEYWORDS):
+                                address = next_line
                 break
 
     if not address and full_text:
         match = addr_pattern.search(full_text)
         if match:
-            address = match.group(1).split("\n")[0].strip()
+            raw_extracted = match.group(1).strip()
+            b_match = BOUNDARY_KEYWORDS_RE.search(raw_extracted)
+            if b_match:
+                raw_extracted = raw_extracted[:b_match.start()].strip()
+            comp_match = COMPANY_SUFFIX_PATTERN.search(raw_extracted)
+            if comp_match:
+                if not name:
+                    name = comp_match.group(1).strip()
+                remainder_addr = comp_match.group(2).strip()
+                if remainder_addr and any(kw in remainder_addr.lower() for kw in ADDRESS_KEYWORDS):
+                    address = remainder_addr
+            elif any(kw in raw_extracted.lower() for kw in ADDRESS_KEYWORDS):
+                address = raw_extracted
 
     if not name and full_text:
         match = mfg_pattern.search(full_text)
@@ -148,6 +222,7 @@ def _extract_manufacturer(text_blocks, full_text):
             name = match.group(1).split(",")[0].strip()
 
     return name, address
+
 
 
 def _extract_dates(text_blocks, full_text):

@@ -127,3 +127,50 @@ def test_ocr_typos_and_devanagari_extraction():
     assert "NYK Techno Solutions" in fields["manufacturerAddress"] or "Industrial Area" in fields["manufacturerAddress"]
     assert fields["netQuantity"] == "500 g"
 
+
+def test_dell_mouse_flat_text_extraction():
+    """Tests extraction on flat OCR string without newlines mimicking real Dell mouse packaging."""
+    ocr_result = {
+        "quality": {
+            "blur_score": 180.0,
+            "is_blurry": False,
+            "brightness": 160.0,
+            "quality_status": "ACCEPTABLE"
+        },
+        "full_text": (
+            "Dell Optical Mouse WM126 "
+            "Maximum Retail Pnce 899 00 (Inclusive of all Taxes) "
+            "Registered Address NYK Techno Solutions Pvt Limited "
+            "Anmol South City No Ba/B5 Mouza Jagdishpur NH-6 Howrah West Bengal-711115 "
+            "Month and Year of Manuiaclure AUGUST 2024 "
+            "For customer care contact 1800-425-4026 email: care@dell.com EAN 5397184246030"
+        ),
+        "text_blocks": [
+            {
+                "text": (
+                    "Dell Optical Mouse WM126 "
+                    "Maximum Retail Pnce 899 00 (Inclusive of all Taxes) "
+                    "Registered Address NYK Techno Solutions Pvt Limited "
+                    "Anmol South City No Ba/B5 Mouza Jagdishpur NH-6 Howrah West Bengal-711115 "
+                    "Month and Year of Manuiaclure AUGUST 2024 "
+                    "For customer care contact 1800-425-4026 email: care@dell.com EAN 5397184246030"
+                ),
+                "confidence": 0.92,
+                "box": [[0, 0], [500, 0], [500, 100], [0, 100]]
+            }
+        ]
+    }
+
+    fields = extract_fields(ocr_result)
+
+    assert fields["mrp"] == "Maximum Retail Pnce 899 00 (Inclusive of all Taxes)"
+    assert fields["monthOfPacking"] == "08"
+    assert fields["yearOfPacking"] == "2024"
+    assert fields["manufacturerName"] == "NYK Techno Solutions Pvt Limited"
+    assert fields["manufacturerAddress"] is not None
+    assert "Anmol South City" in fields["manufacturerAddress"]
+    assert "Howrah" in fields["manufacturerAddress"] or "711115" in fields["manufacturerAddress"]
+    assert "1800-425-4026" in fields["consumerCare"] or "care@dell.com" in fields["consumerCare"]
+
+
+

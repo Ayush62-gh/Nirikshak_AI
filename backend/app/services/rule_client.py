@@ -29,8 +29,7 @@ def _build_rule_engine_request(extracted_fields: dict) -> dict:
         # TODO: Should eventually be detected/provided; hardcoded False for MVP
         "isImported": False,
         "manufacturerName": extracted_fields.get("manufacturer"),
-        # TODO: OCR does not currently extract manufacturerAddress
-        "manufacturerAddress": None,
+        "manufacturerAddress": extracted_fields.get("manufacturer_address"),
         "packerName": None,
         "importerName": None,
         "netQuantity": extracted_fields.get("net_quantity"),

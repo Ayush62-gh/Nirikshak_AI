@@ -11,6 +11,7 @@ def test_build_rule_engine_request_mapping():
         "product_id": "test-prod-100",
         "product_name": "Sample Biscuits 200g",
         "manufacturer": "ABC Foods Pvt Ltd",
+        "manufacturer_address": "123 Industrial Estate, Delhi",
         "net_quantity": "200 g",
         "mrp": "Rs. 45",
         "mfg_date": "01/2026",
@@ -24,7 +25,7 @@ def test_build_rule_engine_request_mapping():
     assert request_body["productType"] == "food"
     assert request_body["isImported"] is False
     assert request_body["manufacturerName"] == "ABC Foods Pvt Ltd"
-    assert request_body["manufacturerAddress"] is None
+    assert request_body["manufacturerAddress"] == "123 Industrial Estate, Delhi"
     assert request_body["netQuantity"] == "200 g"
     assert request_body["mrp"] == "Rs. 45"
     assert request_body["monthOfPacking"] == "01"

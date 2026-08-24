@@ -17,29 +17,38 @@ MINIMAL_JPEG_BYTES = (
 )
 
 
-def ensure_sample_image():
+def get_real_sample_image() -> tuple[str, str]:
     os.makedirs(SAMPLE_IMG_DIR, exist_ok=True)
-    if not os.path.exists(SAMPLE_IMG_PATH):
-        try:
-            from PIL import Image
-            img = Image.new("RGB", (200, 200), color=(73, 109, 137))
-            img.save(SAMPLE_IMG_PATH, "JPEG")
-            print(f"Created sample image using PIL at: {SAMPLE_IMG_PATH}")
-        except Exception:
-            with open(SAMPLE_IMG_PATH, "wb") as f:
-                f.write(MINIMAL_JPEG_BYTES)
-            print(f"Created sample image binary at: {SAMPLE_IMG_PATH}")
+    candidates = []
+    for fname in os.listdir(SAMPLE_IMG_DIR):
+        fpath = os.path.join(SAMPLE_IMG_DIR, fname)
+        if os.path.isfile(fpath) and fname != ".gitkeep":
+            size = os.path.getsize(fpath)
+            if size > 1000:  # real photo, not tiny stub
+                candidates.append((fpath, fname, size))
+
+    if candidates:
+        # Pick the largest image file or first real photo
+        candidates.sort(key=lambda x: x[2], reverse=True)
+        chosen_path, chosen_name, chosen_size = candidates[0]
+        print(f"Using real sample image: {chosen_name} ({chosen_size / 1024:.1f} KB) at {chosen_path}")
+        return chosen_path, chosen_name
+
+    # Fallback if no real photo exists
+    ensure_sample_image()
+    return SAMPLE_IMG_PATH, "test_sample.jpg"
 
 
 def main():
-    ensure_sample_image()
+    image_path, filename = get_real_sample_image()
+    content_type = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
 
     url = "http://localhost:8000/api/scan"
-    print(f"Sending POST request to {url} with image file...")
+    print(f"Sending POST request to {url} with image file '{filename}'...")
 
-    with open(SAMPLE_IMG_PATH, "rb") as img_file:
-        files = {"image": ("test_sample.jpg", img_file, "image/jpeg")}
-        with httpx.Client(timeout=10.0) as client:
+    with open(image_path, "rb") as img_file:
+        files = {"image": (filename, img_file, content_type)}
+        with httpx.Client(timeout=120.0) as client:
             response = client.post(url, files=files)
 
     print("\n--- TEST RESPONSE ---")

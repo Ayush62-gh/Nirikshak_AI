@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.session import init_db
-from app.routers import scan, health
+from app.routers import scan, health, auth
 from app.core.errors import register_exception_handlers
 
 
@@ -34,4 +34,5 @@ register_exception_handlers(app)
 
 # Mount API routers
 app.include_router(health.router, prefix="/api")
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(scan.router, prefix="/api")

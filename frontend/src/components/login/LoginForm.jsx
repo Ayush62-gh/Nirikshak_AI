@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { loginUser } from "../../services/api";
 import {
   Eye,
   EyeOff,
@@ -8,25 +9,35 @@ import {
   Mail,
   ShieldCheck,
   ArrowRight,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 
 function LoginForm() {
-   const navigate = useNavigate();
+  const navigate = useNavigate();
   const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleSubmit = (e) => {
-  e.preventDefault();
-
-  // Temporary frontend authentication
-  login({
-    name: "Inspector",
-    email: "inspector@example.com",
-  });
-
-  navigate("/");
-};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await loginUser(email, password);
+      login(res.access_token, res.user);
+      navigate("/");
+    } catch (err) {
+      console.error("Login error:", err);
+      setError(err.message || "Invalid credentials. Please check your email and password.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-1 items-center justify-center bg-white px-6 py-10 sm:px-10 lg:px-14 xl:px-20">
@@ -63,6 +74,17 @@ function LoginForm() {
 
         </div>
 
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-600" />
+            <div className="flex-1">
+              <p className="font-semibold text-red-900">Authentication Error</p>
+              <p className="mt-0.5 text-xs text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit}>
 
@@ -88,6 +110,8 @@ function LoginForm() {
                 type="email"
                 placeholder="Enter your email"
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-[#173b63] outline-none transition placeholder:text-[#a8b5c5] focus:border-[#12988d] focus:ring-4 focus:ring-[#12988d]/10"
               />
 
@@ -129,6 +153,8 @@ function LoginForm() {
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-sm text-[#173b63] outline-none transition placeholder:text-[#a8b5c5] focus:border-[#12988d] focus:ring-4 focus:ring-[#12988d]/10"
               />
 
@@ -168,14 +194,23 @@ function LoginForm() {
           {/* Sign In */}
           <button
             type="submit"
-            className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#12988d] text-sm font-semibold text-white shadow-sm transition hover:bg-[#0e8178] hover:shadow-md active:scale-[0.99]"
+            disabled={loading}
+            className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#12988d] text-sm font-semibold text-white shadow-sm transition hover:bg-[#0e8178] hover:shadow-md active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Sign In
-
-            <ArrowRight
-              size={17}
-              className="transition-transform duration-200 group-hover:translate-x-1"
-            />
+            {loading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Signing In...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In</span>
+                <ArrowRight
+                  size={17}
+                  className="transition-transform duration-200 group-hover:translate-x-1"
+                />
+              </>
+            )}
           </button>
 
           {/* Divider */}

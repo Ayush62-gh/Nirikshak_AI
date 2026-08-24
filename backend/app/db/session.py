@@ -21,6 +21,7 @@ def init_db() -> None:
             os.makedirs(db_dir, exist_ok=True)
 
     from app.models.scan import Scan  # noqa: F401
+    from app.models.user import User  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
 

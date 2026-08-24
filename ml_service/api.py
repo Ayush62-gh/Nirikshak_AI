@@ -48,7 +48,7 @@ def health():
 
 
 @app.post("/extract")
-async def extract_text_from_image(file: UploadFile = File(...)):
+def extract_text_from_image(file: UploadFile = File(...)):
     """
     Processes an uploaded product image and returns extracted text and quality info.
     
@@ -66,7 +66,7 @@ async def extract_text_from_image(file: UploadFile = File(...)):
             )
         )
 
-    contents = await file.read()
+    contents = file.file.read()
     if not contents:
         raise HTTPException(
             status_code=400,

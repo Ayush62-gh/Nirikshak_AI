@@ -1,0 +1,47 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python generated cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest cache
+.pytest_cache/
+
+# Local input images
+input_images/
+
+# Generated images
+processed_images/
+annotated_images/
+
+# Downloaded OCR/ML models
+.EasyOCR/
+easyocr_models/
+models/
+*.pt
+*.pth
+*.onnx
+
+# Large or local datasets
+datasets/
+data/
+
+# Environment and secret files
+.env
+.env.*
+
+# VS Code and IDE files
+.vscode/
+.idea/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+

@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart3,
   CalendarDays,
@@ -10,71 +12,12 @@ import {
   XCircle,
   ShieldCheck,
   ArrowUpRight,
+  Loader2,
+  AlertCircle,
+  FileText,
+  RefreshCw,
 } from "lucide-react";
-
-const trendData = [
-  { day: "Mon", passed: 18, warning: 5, failed: 2 },
-  { day: "Tue", passed: 22, warning: 4, failed: 1 },
-  { day: "Wed", passed: 16, warning: 7, failed: 3 },
-  { day: "Thu", passed: 24, warning: 3, failed: 2 },
-  { day: "Fri", passed: 20, warning: 6, failed: 2 },
-  { day: "Sat", passed: 15, warning: 4, failed: 1 },
-  { day: "Sun", passed: 21, warning: 5, failed: 1 },
-];
-
-const nonCompliantProducts = [
-  {
-    name: "Coca-Cola Original",
-    violations: 8,
-    score: 45,
-  },
-  {
-    name: "Maggi 2-Minute Noodles",
-    violations: 6,
-    score: 68,
-  },
-  {
-    name: "Parle-G Original",
-    violations: 4,
-    score: 72,
-  },
-  {
-    name: "Sunlite Refined Oil",
-    violations: 3,
-    score: 76,
-  },
-];
-
-const recentInspections = [
-  {
-    product: "Sunlite Refined Oil",
-    id: "INS-2026-000128",
-    date: "Aug 23, 2026",
-    status: "Passed",
-    score: 92,
-  },
-  {
-    product: "Amul Taaza Milk",
-    id: "INS-2026-000127",
-    date: "Aug 23, 2026",
-    status: "Passed",
-    score: 95,
-  },
-  {
-    product: "Maggi 2-Minute Noodles",
-    id: "INS-2026-000126",
-    date: "Aug 22, 2026",
-    status: "Warning",
-    score: 68,
-  },
-  {
-    product: "Coca-Cola Original",
-    id: "INS-2026-000124",
-    date: "Aug 21, 2026",
-    status: "Failed",
-    score: 45,
-  },
-];
+import { getScans } from "../services/api";
 
 const statusStyles = {
   Passed: "bg-[#E8F8F0] text-[#07975F]",
@@ -82,7 +25,172 @@ const statusStyles = {
   Failed: "bg-[#FFE9EB] text-[#E62D37]",
 };
 
+function formatTimestamp(isoString) {
+  if (!isoString) return "N/A";
+  try {
+    const dateObj = new Date(isoString);
+    if (isNaN(dateObj.getTime())) return "N/A";
+    return dateObj.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "N/A";
+  }
+}
+
+function calculateScanScore(scan) {
+  const status = scan.compliance?.status;
+  const violationsCount = scan.compliance?.violations?.length || 0;
+  if (status === "COMPLIANT") return 100;
+  if (status === "NON_COMPLIANT") return Math.max(10, 100 - violationsCount * 25);
+  return Math.max(30, 100 - violationsCount * 15);
+}
+
 function Reports() {
+  const navigate = useNavigate();
+  const [scans, setScans] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchReportsData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getScans(1, 100);
+      const list = Array.isArray(data.scans)
+        ? data.scans
+        : Array.isArray(data)
+        ? data
+        : [];
+      setScans(list);
+      setTotalCount(typeof data.total === "number" ? data.total : list.length);
+    } catch (err) {
+      console.error("Reports fetch error:", err);
+      setError(err.message || "Failed to load reports data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReportsData();
+  }, []);
+
+  // Compute live summary statistics
+  const total = totalCount || scans.length;
+  const passedCount = scans.filter((s) => s.compliance?.status === "COMPLIANT").length;
+  const warningCount = scans.filter((s) => s.compliance?.status === "PARTIAL").length;
+  const failedCount = scans.filter((s) => s.compliance?.status === "NON_COMPLIANT").length;
+
+  const passedPct = total > 0 ? ((passedCount / scans.length) * 100).toFixed(1) : "0.0";
+  const warningPct = total > 0 ? ((warningCount / scans.length) * 100).toFixed(1) : "0.0";
+  const failedPct = total > 0 ? ((failedCount / scans.length) * 100).toFixed(1) : "0.0";
+
+  const totalScores = scans.reduce((acc, s) => acc + calculateScanScore(s), 0);
+  const avgComplianceScore = scans.length > 0 ? (totalScores / scans.length).toFixed(1) : "0.0";
+
+  // Compute rolling last 7 days trend data
+  const now = new Date();
+  const rollingDays = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+
+    rollingDays.push({
+      day: dayName,
+      dateKey,
+      passed: 0,
+      warning: 0,
+      failed: 0,
+    });
+  }
+
+  scans.forEach((scan) => {
+    if (!scan.timestamp) return;
+    const scanDate = new Date(scan.timestamp);
+    if (isNaN(scanDate.getTime())) return;
+    const yyyy = scanDate.getFullYear();
+    const mm = String(scanDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(scanDate.getDate()).padStart(2, "0");
+    const scanDateKey = `${yyyy}-${mm}-${dd}`;
+
+    const targetDay = rollingDays.find((rd) => rd.dateKey === scanDateKey);
+    if (targetDay) {
+      const status = scan.compliance?.status;
+      if (status === "COMPLIANT") targetDay.passed += 1;
+      else if (status === "NON_COMPLIANT") targetDay.failed += 1;
+      else targetDay.warning += 1;
+    }
+  });
+
+  const trendData = rollingDays;
+  const maxTrendTotal = Math.max(
+    5,
+    ...trendData.map((d) => d.passed + d.warning + d.failed)
+  );
+
+  // Compute Conic Donut Gradient Angles
+  const passedAngle = total > 0 ? (passedCount / scans.length) * 360 : 0;
+  const warningAngle = total > 0 ? (warningCount / scans.length) * 360 : 0;
+  const donutGradient = total > 0
+    ? `conic-gradient(#0F766E 0deg ${passedAngle}deg, #E9A23B ${passedAngle}deg ${passedAngle + warningAngle}deg, #E45B63 ${passedAngle + warningAngle}deg 360deg)`
+    : "conic-gradient(#DDE6F0 0deg 360deg)";
+
+  // Compute Top Non-Compliant Products
+  const nonCompliantMap = {};
+  scans.forEach((scan) => {
+    if (scan.compliance?.status === "COMPLIANT") return;
+    const name = scan.product?.product_name || scan.extracted_fields?.product_name || "Unidentified Product";
+    const violations = scan.compliance?.violations?.length || 1;
+    const score = calculateScanScore(scan);
+
+    if (!nonCompliantMap[name]) {
+      nonCompliantMap[name] = { name, violations: 0, totalScore: 0, count: 0 };
+    }
+    nonCompliantMap[name].violations += violations;
+    nonCompliantMap[name].totalScore += score;
+    nonCompliantMap[name].count += 1;
+  });
+
+  const nonCompliantProducts = Object.values(nonCompliantMap)
+    .map((item) => ({
+      name: item.name,
+      violations: item.violations,
+      score: Math.round(item.totalScore / item.count),
+    }))
+    .sort((a, b) => b.violations - a.violations)
+    .slice(0, 4);
+
+  // Compute Recent Inspections
+  const recentInspections = scans.slice(0, 5).map((scan, index) => {
+    const rawStatus = scan.compliance?.status;
+    const statusLabel =
+      rawStatus === "COMPLIANT"
+        ? "Passed"
+        : rawStatus === "NON_COMPLIANT"
+        ? "Failed"
+        : "Warning";
+
+    return {
+      id: scan.scan_id
+        ? `INS-${scan.scan_id.slice(0, 8).toUpperCase()}`
+        : `INS-00${index + 1}`,
+      product: scan.product?.product_name || "Unknown Product",
+      date: formatTimestamp(scan.timestamp),
+      status: statusLabel,
+      score: calculateScanScore(scan),
+    };
+  });
+
   return (
     <div className="min-h-full bg-[#F6F9FC] px-8 py-6">
 
@@ -110,7 +218,7 @@ function Reports() {
         <button className="flex min-w-[170px] items-center justify-between gap-4 rounded-lg border border-[#D8E1EB] px-4 py-2.5 text-sm text-[#405570]">
           <span className="flex items-center gap-2">
             <CalendarDays size={17} />
-            Last 30 Days
+            All Recorded
           </span>
           <ChevronDown size={16} />
         </button>
@@ -134,7 +242,27 @@ function Reports() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Error Alert */}
+      {error && (
+        <div className="mt-5 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-red-800 shadow-sm">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
+            <div>
+              <h4 className="font-bold text-red-900">Error Loading Reports</h4>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={fetchReportsData}
+            className="flex items-center gap-1.5 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-200 transition-colors"
+          >
+            <RefreshCw size={14} />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
+      {/* Stats Cards */}
       <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-5">
 
         <div className="rounded-2xl border border-[#DDE6F0] bg-white p-5 shadow-sm">
@@ -149,11 +277,11 @@ function Reports() {
           </div>
 
           <h2 className="mt-3 text-2xl font-bold text-[#142B4A]">
-            128
+            {loading ? "..." : total.toLocaleString()}
           </h2>
 
           <p className="mt-1 text-xs text-[#07975F]">
-            +12.4% from last month
+            All recorded scans
           </p>
         </div>
 
@@ -167,11 +295,11 @@ function Reports() {
           </div>
 
           <h2 className="mt-3 text-2xl font-bold text-[#07975F]">
-            98
+            {loading ? "..." : passedCount.toLocaleString()}
           </h2>
 
           <p className="mt-1 text-xs text-[#6B7F99]">
-            76.6% of inspections
+            {passedPct}% of sample
           </p>
         </div>
 
@@ -185,11 +313,11 @@ function Reports() {
           </div>
 
           <h2 className="mt-3 text-2xl font-bold text-[#E88900]">
-            18
+            {loading ? "..." : warningCount.toLocaleString()}
           </h2>
 
           <p className="mt-1 text-xs text-[#6B7F99]">
-            14.1% of inspections
+            {warningPct}% of sample
           </p>
         </div>
 
@@ -203,11 +331,11 @@ function Reports() {
           </div>
 
           <h2 className="mt-3 text-2xl font-bold text-[#E62D37]">
-            12
+            {loading ? "..." : failedCount.toLocaleString()}
           </h2>
 
           <p className="mt-1 text-xs text-[#6B7F99]">
-            9.3% of inspections
+            {failedPct}% of sample
           </p>
         </div>
 
@@ -223,11 +351,11 @@ function Reports() {
           </div>
 
           <h2 className="mt-3 text-2xl font-bold text-[#0F766E]">
-            86.4%
+            {loading ? "..." : `${avgComplianceScore}%`}
           </h2>
 
           <p className="mt-1 text-xs text-[#07975F]">
-            +3.2% improvement
+            Overall accuracy
           </p>
         </div>
 
@@ -246,7 +374,7 @@ function Reports() {
               </h2>
 
               <p className="mt-1 text-sm text-[#71829B]">
-                Inspection results over the last 7 days
+                Inspection results breakdown by day of week
               </p>
             </div>
 
@@ -268,57 +396,63 @@ function Reports() {
             </div>
           </div>
 
-          <div className="mt-7 flex h-[250px] items-end gap-5 border-b border-l border-[#E6EDF4] px-5 pb-2 pt-4">
+          {loading ? (
+            <div className="flex h-[250px] items-center justify-center text-[#71829B] gap-2">
+              <Loader2 size={24} className="animate-spin text-[#0F766E]" />
+              <span className="text-sm">Loading trend data...</span>
+            </div>
+          ) : (
+            <div className="mt-7 flex h-[250px] items-end gap-5 border-b border-l border-[#E6EDF4] px-5 pb-2 pt-4">
 
-            {trendData.map((item) => {
-              const total = item.passed + item.warning + item.failed;
-              const max = 35;
+              {trendData.map((item) => {
+                const itemTotal = item.passed + item.warning + item.failed;
 
-              return (
-                <div
-                  key={item.day}
-                  className="flex h-full flex-1 flex-col items-center justify-end gap-2"
-                >
-                  <div className="flex h-full w-full max-w-12 flex-col justify-end overflow-hidden rounded-t-md">
+                return (
+                  <div
+                    key={item.day}
+                    className="flex h-full flex-1 flex-col items-center justify-end gap-2"
+                  >
+                    <div className="flex h-full w-full max-w-12 flex-col justify-end overflow-hidden rounded-t-md">
 
-                    <div
-                      className="bg-[#E45B63]"
-                      style={{
-                        height: `${(item.failed / max) * 100}%`,
-                      }}
-                    />
+                      <div
+                        className="bg-[#E45B63]"
+                        style={{
+                          height: `${(item.failed / maxTrendTotal) * 100}%`,
+                        }}
+                      />
 
-                    <div
-                      className="bg-[#E9A23B]"
-                      style={{
-                        height: `${(item.warning / max) * 100}%`,
-                      }}
-                    />
+                      <div
+                        className="bg-[#E9A23B]"
+                        style={{
+                          height: `${(item.warning / maxTrendTotal) * 100}%`,
+                        }}
+                      />
 
-                    <div
-                      className="bg-[#0F766E]"
-                      style={{
-                        height: `${(item.passed / max) * 100}%`,
-                      }}
-                    />
+                      <div
+                        className="bg-[#0F766E]"
+                        style={{
+                          height: `${(item.passed / maxTrendTotal) * 100}%`,
+                        }}
+                      />
 
+                    </div>
+
+                    <span className="text-xs text-[#71829B]">
+                      {item.day}
+                    </span>
+
+                    <span className="text-[11px] text-[#94A3B8]">
+                      {itemTotal}
+                    </span>
                   </div>
+                );
+              })}
 
-                  <span className="text-xs text-[#71829B]">
-                    {item.day}
-                  </span>
-
-                  <span className="text-[11px] text-[#94A3B8]">
-                    {total}
-                  </span>
-                </div>
-              );
-            })}
-
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Compliance Status */}
+        {/* Compliance Status Donut */}
         <div className="rounded-2xl border border-[#DDE6F0] bg-white p-6 shadow-sm">
 
           <h2 className="text-lg font-bold text-[#142B4A]">
@@ -332,15 +466,14 @@ function Reports() {
           <div className="mt-7 flex items-center justify-center">
 
             <div
-              className="relative flex h-48 w-48 items-center justify-center rounded-full"
+              className="relative flex h-48 w-48 items-center justify-center rounded-full transition-all"
               style={{
-                background:
-                  "conic-gradient(#0F766E 0deg 276deg, #E9A23B 276deg 327deg, #E45B63 327deg 360deg)",
+                background: donutGradient,
               }}
             >
               <div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-white">
                 <span className="text-3xl font-bold text-[#142B4A]">
-                  128
+                  {loading ? "..." : total}
                 </span>
                 <span className="text-xs text-[#71829B]">
                   Total
@@ -358,7 +491,7 @@ function Reports() {
                 Passed
               </p>
               <strong className="text-sm text-[#142B4A]">
-                76.6%
+                {passedPct}%
               </strong>
             </div>
 
@@ -368,7 +501,7 @@ function Reports() {
                 Warning
               </p>
               <strong className="text-sm text-[#142B4A]">
-                14.1%
+                {warningPct}%
               </strong>
             </div>
 
@@ -378,7 +511,7 @@ function Reports() {
                 Failed
               </p>
               <strong className="text-sm text-[#142B4A]">
-                9.3%
+                {failedPct}%
               </strong>
             </div>
 
@@ -409,39 +542,51 @@ function Reports() {
 
           <div className="mt-5 space-y-4">
 
-            {nonCompliantProducts.map((product) => (
-              <div
-                key={product.name}
-                className="rounded-xl border border-[#E7EDF4] p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
+            {loading ? (
+              <div className="flex items-center justify-center p-8 text-[#71829B] gap-2">
+                <Loader2 size={20} className="animate-spin text-[#0F766E]" />
+                <span className="text-sm">Loading products...</span>
+              </div>
+            ) : nonCompliantProducts.length === 0 ? (
+              <div className="p-8 text-center text-sm text-[#71829B]">
+                <CheckCircle2 size={32} className="mx-auto mb-2 text-[#07975F]" />
+                No non-compliant products detected.
+              </div>
+            ) : (
+              nonCompliantProducts.map((product) => (
+                <div
+                  key={product.name}
+                  className="rounded-xl border border-[#E7EDF4] p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
 
-                  <div>
-                    <p className="text-sm font-semibold text-[#243B55]">
-                      {product.name}
-                    </p>
+                    <div>
+                      <p className="text-sm font-semibold text-[#243B55]">
+                        {product.name}
+                      </p>
 
-                    <p className="mt-1 text-xs text-[#7B8DA3]">
-                      {product.violations} violations detected
-                    </p>
+                      <p className="mt-1 text-xs text-[#7B8DA3]">
+                        {product.violations} violations detected
+                      </p>
+                    </div>
+
+                    <span className="text-sm font-bold text-[#E62D37]">
+                      {product.score}%
+                    </span>
+
                   </div>
 
-                  <span className="text-sm font-bold text-[#E62D37]">
-                    {product.score}%
-                  </span>
-
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#EEF2F6]">
+                    <div
+                      className="h-full rounded-full bg-[#E45B63]"
+                      style={{
+                        width: `${product.score}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#EEF2F6]">
-                  <div
-                    className="h-full rounded-full bg-[#E45B63]"
-                    style={{
-                      width: `${product.score}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
 
           </div>
         </div>
@@ -461,7 +606,10 @@ function Reports() {
               </p>
             </div>
 
-            <button className="text-sm font-semibold text-[#0F766E]">
+            <button
+              onClick={() => navigate("/history")}
+              className="text-sm font-semibold text-[#0F766E] hover:text-[#0B625C] transition-colors"
+            >
               View All
             </button>
 
@@ -469,90 +617,103 @@ function Reports() {
 
           <div className="overflow-x-auto">
 
-            <table className="w-full min-w-[650px]">
+            {loading ? (
+              <div className="flex items-center justify-center p-8 text-[#71829B] gap-2">
+                <Loader2 size={20} className="animate-spin text-[#0F766E]" />
+                <span className="text-sm">Loading recent inspections...</span>
+              </div>
+            ) : recentInspections.length === 0 ? (
+              <div className="p-8 text-center text-sm text-[#71829B]">
+                <FileText size={32} className="mx-auto mb-2 text-[#94A3B8]" />
+                No recent inspection records.
+              </div>
+            ) : (
+              <table className="w-full min-w-[650px]">
 
-              <thead>
-                <tr className="border-b border-[#E6EDF4] text-left">
-                  <th className="px-6 py-3 text-xs font-semibold text-[#71829B]">
-                    Product
-                  </th>
+                <thead>
+                  <tr className="border-b border-[#E6EDF4] text-left">
+                    <th className="px-6 py-3 text-xs font-semibold text-[#71829B]">
+                      Product
+                    </th>
 
-                  <th className="px-4 py-3 text-xs font-semibold text-[#71829B]">
-                    Date
-                  </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-[#71829B]">
+                      Date
+                    </th>
 
-                  <th className="px-4 py-3 text-xs font-semibold text-[#71829B]">
-                    Status
-                  </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-[#71829B]">
+                      Status
+                    </th>
 
-                  <th className="px-6 py-3 text-xs font-semibold text-[#71829B]">
-                    Score
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-
-                {recentInspections.map((inspection) => (
-                  <tr
-                    key={inspection.id}
-                    className="border-b border-[#EEF2F6] last:border-none"
-                  >
-
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-semibold text-[#243B55]">
-                        {inspection.product}
-                      </p>
-
-                      <p className="mt-1 text-xs text-[#8A9AAF]">
-                        {inspection.id}
-                      </p>
-                    </td>
-
-                    <td className="px-4 py-4 text-sm text-[#64748B]">
-                      {inspection.date}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusStyles[inspection.status]}`}
-                      >
-                        {inspection.status === "Passed" && (
-                          <CheckCircle2 size={13} />
-                        )}
-
-                        {inspection.status === "Warning" && (
-                          <AlertTriangle size={13} />
-                        )}
-
-                        {inspection.status === "Failed" && (
-                          <XCircle size={13} />
-                        )}
-
-                        {inspection.status}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-sm font-bold ${
-                          inspection.score >= 80
-                            ? "text-[#07975F]"
-                            : inspection.score >= 60
-                            ? "text-[#E88900]"
-                            : "text-[#E62D37]"
-                        }`}
-                      >
-                        {inspection.score}%
-                      </span>
-                    </td>
-
+                    <th className="px-6 py-3 text-xs font-semibold text-[#71829B]">
+                      Score
+                    </th>
                   </tr>
-                ))}
+                </thead>
 
-              </tbody>
+                <tbody>
 
-            </table>
+                  {recentInspections.map((inspection) => (
+                    <tr
+                      key={inspection.id}
+                      onClick={() => navigate("/history")}
+                      className="border-b border-[#EEF2F6] last:border-none cursor-pointer hover:bg-slate-50/50 transition-colors"
+                    >
+
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-semibold text-[#243B55]">
+                          {inspection.product}
+                        </p>
+
+                        <p className="mt-1 text-xs text-[#8A9AAF]">
+                          {inspection.id}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-[#64748B]">
+                        {inspection.date}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusStyles[inspection.status]}`}
+                        >
+                          {inspection.status === "Passed" && (
+                            <CheckCircle2 size={13} />
+                          )}
+
+                          {inspection.status === "Warning" && (
+                            <AlertTriangle size={13} />
+                          )}
+
+                          {inspection.status === "Failed" && (
+                            <XCircle size={13} />
+                          )}
+
+                          {inspection.status}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`text-sm font-bold ${
+                            inspection.score >= 80
+                              ? "text-[#07975F]"
+                              : inspection.score >= 60
+                              ? "text-[#E88900]"
+                              : "text-[#E62D37]"
+                          }`}
+                        >
+                          {inspection.score}%
+                        </span>
+                      </td>
+
+                    </tr>
+                  ))}
+
+                </tbody>
+
+              </table>
+            )}
 
           </div>
         </div>

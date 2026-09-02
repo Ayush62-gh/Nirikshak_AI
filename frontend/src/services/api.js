@@ -30,6 +30,21 @@ async function getErrorMessage(response, fallbackMsg) {
 }
 
 /**
+ * Helper to handle response errors, specifically 401 Unauthorized status globally.
+ */
+async function handleResponseError(response, fallbackMsg) {
+  if (response.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  }
+
+  return await getErrorMessage(response, fallbackMsg);
+}
+
+/**
  * Authenticate user with email and password.
  * POST /api/auth/login
  */
@@ -112,7 +127,7 @@ export async function getCurrentUser() {
     });
 
     if (!response.ok) {
-      const errorMsg = await getErrorMessage(
+      const errorMsg = await handleResponseError(
         response,
         `Failed to fetch user profile (${response.status})`
       );
@@ -148,7 +163,7 @@ export async function submitScan(imageFile) {
     });
 
     if (!response.ok) {
-      const errorMsg = await getErrorMessage(
+      const errorMsg = await handleResponseError(
         response,
         `Scan submission failed (${response.status})`
       );
@@ -181,7 +196,7 @@ export async function getScans(page = 1, limit = 20) {
     );
 
     if (!response.ok) {
-      const errorMsg = await getErrorMessage(
+      const errorMsg = await handleResponseError(
         response,
         `Failed to fetch scans (${response.status})`
       );
@@ -214,7 +229,7 @@ export async function getScanById(scanId) {
         response.status === 404
           ? `Scan with ID "${scanId}" not found.`
           : `Failed to fetch scan details (${response.status})`;
-      const errorMsg = await getErrorMessage(response, fallbackMsg);
+      const errorMsg = await handleResponseError(response, fallbackMsg);
       throw new Error(errorMsg);
     }
 

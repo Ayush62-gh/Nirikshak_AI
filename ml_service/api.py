@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     """
     global _reader_singleton
     print("Loading EasyOCR.Reader singleton at startup...", flush=True)
-    _reader_singleton = easyocr.Reader(["en", "hi"], gpu=False)
+    _reader_singleton = easyocr.Reader(["en", "hi"], gpu=False, verbose=False)
 
     # Patch easyocr.Reader in easyocr and ocr modules to return the singleton
     easyocr.Reader = lambda *args, **kwargs: _reader_singleton

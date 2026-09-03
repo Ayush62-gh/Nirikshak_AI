@@ -3,10 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { getScans } from "../services/api";
 
 import StatCard from "../components/StatCard";
-import UploadBox from "../components/UploadBox";
 import RecentInspections from "../components/RecentInspections";
 import ComplianceInsights from "../components/ComplianceInsights";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw ,Camera, ArrowRight} from "lucide-react";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -113,7 +112,7 @@ function Dashboard() {
       </div>
 
       {/* New Inspection & Recent Inspections */}
-      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+      {/* <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
 
         <div
           onClick={() => navigate("/new-inspection")}
@@ -128,7 +127,45 @@ function Dashboard() {
           error={error}
         />
 
+      </div> */}
+      {/* New Inspection & Recent Inspections */}
+        <div className="mt-6 space-y-6">
+
+          {/* Start New Inspection */}
+        <div
+        onClick={() => navigate("/new-inspection")}
+        className="group flex cursor-pointer items-center justify-between rounded-2xl border border-[#D9E5EE] bg-white px-7 py-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0F766E]/40 hover:shadow-md"
+        >
+        <div className="flex items-center gap-5">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F0FDFA] text-[#0F766E]">
+        <Camera size={28} strokeWidth={1.8} />
+        </div>
+
+        <div>
+        <h2 className="text-xl font-bold text-[#172033]">
+          Start New Inspection
+        </h2>
+
+        <p className="mt-1 text-sm text-[#64748B]">
+          Scan a packaged commodity and check its compliance.
+        </p>
       </div>
+    </div>
+
+    <div className="flex items-center gap-2 rounded-xl bg-[#0F766E] px-5 py-3 text-sm font-semibold text-white transition group-hover:bg-[#0D6B64]">
+      Start Inspection
+      <ArrowRight size={18} />
+    </div>
+  </div>
+
+  {/* Recent Inspections */}
+  <RecentInspections
+    scans={scans.slice(0, 5)}
+    loading={loading}
+    error={error}
+  />
+
+</div>
 
       {/* Compliance Insights Section */}
       <div className="compliance-insights-section">

@@ -6,7 +6,6 @@ import {
   BookOpen,
   Settings,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 const navigationItems = [
@@ -57,7 +56,7 @@ function Sidebar() {
 
         <div>
           <h1 className="text-xl font-bold tracking-tight">
-            NIRIKSHAK AI
+            NIRIKSHAK
           </h1>
 
           <p className="text-xs text-white/70">
@@ -120,7 +119,7 @@ function Sidebar() {
       </nav>
 
       {/* Trust Card */}
-      <div className="mx-4 mb-4 rounded-2xl border border-white/15 bg-white/5 p-3.5">
+      {/* <div className="mx-4 mb-4 rounded-2xl border border-white/15 bg-white/5 p-3.5">
         <div className="mb-3 text-[#0F766E]">
           <Sparkles size={24} />
         </div>
@@ -136,7 +135,43 @@ function Sidebar() {
           <br />
           Inspections.
         </p>
-      </div>
+      </div> */}
+      {/* Built for Inspectors Card */}
+<div className="mx-4 mb-4 rounded-2xl border border-white/15 bg-white/5 p-4">
+  <h3 className="text-sm font-semibold text-white">
+    Built for Inspectors
+  </h3>
+
+  <div className="mt-3 space-y-2.5">
+    <div className="flex items-center gap-2.5">
+      <ShieldCheck size={15} className="shrink-0 text-[#14B8A6]" />
+      <span className="text-xs text-white/70">
+        Inspector-focused
+      </span>
+    </div>
+
+    <div className="flex items-center gap-2.5">
+      <ShieldCheck size={15} className="shrink-0 text-[#14B8A6]" />
+      <span className="text-xs text-white/70">
+        Evidence-based
+      </span>
+    </div>
+
+    <div className="flex items-center gap-2.5">
+      <ShieldCheck size={15} className="shrink-0 text-[#14B8A6]" />
+      <span className="text-xs text-white/70">
+        Rule-focused
+      </span>
+    </div>
+
+    <div className="flex items-center gap-2.5">
+      <ShieldCheck size={15} className="shrink-0 text-[#14B8A6]" />
+      <span className="text-xs text-white/70">
+        Traceable reports
+      </span>
+    </div>
+  </div>
+</div>
     </aside>
   );
 }

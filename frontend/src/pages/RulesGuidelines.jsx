@@ -75,7 +75,8 @@ function RulesGuidelines() {
     <div className="min-h-screen bg-slate-50 px-6 py-8 lg:px-10">
 
       {/* HEADER */}
-      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pr-62"> */}
+      <div className="mb-7 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">
             Rules & Guidelines
@@ -85,10 +86,11 @@ function RulesGuidelines() {
             requirements.
           </p>
         </div>
-
-        <button className="rounded-lg bg-teal-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-teal-700">
+        <div className="flex justify-end mt-11">
+        <button className="rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-teal-700">
           ↓ &nbsp; Download All
         </button>
+        </div>
       </div>
 
       {/* SEARCH + FILTERS */}

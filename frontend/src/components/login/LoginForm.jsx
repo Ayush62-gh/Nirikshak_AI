@@ -58,7 +58,8 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen flex-1 items-center justify-center bg-white px-6 py-10 sm:px-10 lg:px-14 xl:px-20">
+    // <div className="flex min-h-screen flex-1 items-center justify-center bg-white px-6 py-10 sm:px-10 lg:px-14 xl:px-20">
+    <div className="flex h-screen min-h-0 flex-1 items-center justify-center overflow-hidden bg-white px-6 py-4 sm:px-10 lg:px-12 xl:px-16">
 
       <div className="w-full max-w-[430px]">
 
@@ -299,17 +300,9 @@ function LoginForm() {
           )}
         </div>
 
-        {/* Security Note */}
-        <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-[#f5faf9] px-3.5 py-3">
-          <ShieldCheck size={16} className="mt-0.5 shrink-0 text-[#12988d]" />
-          <p className="text-[11px] leading-4 text-[#6680a3]">
-            Protected with secure JWT authentication and encrypted passwords.
-          </p>
-        </div>
-
         {/* Footer */}
         <div className="mt-6 flex items-center justify-between text-[10px] text-[#9aabbe]">
-          <span>© 2026 NIRIKSHAK AI</span>
+          <span>© 2026 NIRIKSHAK </span>
           <span>v1.0.0</span>
         </div>
 

@@ -1,42 +1,3 @@
-// import { BrowserRouter, Routes, Route } from "react-router-dom";
-// import ProtectedRoute from "./components/ProtectedRoute";
-
-// import DashboardLayout from "./layouts/DashboardLayout";
-// import Dashboard from "./pages/Dashboard";
-// import NewInspection from "./pages/NewInspection";
-// import History from "./pages/History";
-// import Reports from "./pages/Reports";
-// import RulesGuidelines from "./pages/RulesGuidelines";
-// import Settings from "./pages/Settings";
-// import Login from "./pages/login";
-
-// function App() {
-//   return (
-//     <BrowserRouter>
-//       <Routes>
-//         <Route path="/login" element={<Login />} />
-//         <Route
-//           path="*"
-//           element={
-//             <DashboardLayout>
-//               <Routes>
-//                 <Route path="/" element={<Dashboard />} />
-//                 <Route path="/new-inspection" element={<NewInspection />} />
-//                 <Route path="/history" element={<History />} />
-//                 <Route path="/reports" element={<Reports />} />
-//                 <Route path="/rules-guidelines" element={<RulesGuidelines />} />
-//                 <Route path="/settings" element={<Settings />} />
-//               </Routes>
-//             </DashboardLayout>
-//           }
-//         />
-//       </Routes>
-//     </BrowserRouter>
-//   );
-// }
-
-// export default App;
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -55,7 +16,7 @@ function App() {
     <BrowserRouter>
       <Routes>
 
-        {/* Public Login */}
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 

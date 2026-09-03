@@ -18,7 +18,7 @@ function SystemInformation() {
           </h2>
 
           <p className="text-xs text-[#7890ae]">
-            Information about your NIRIKSHAK AI system.
+            Information about your NIRIKSHAK system.
           </p>
         </div>
 

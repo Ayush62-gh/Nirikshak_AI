@@ -44,12 +44,6 @@ function LoginBrandPanel() {
             <br />
             <span className="text-[#12988d]">Comply better.</span>
           </h2>
-
-          {/* <p className="mt-1 max-w-lg text-[14px] leading-6 text-[#6680a3]">
-            Simplify inspections, identify compliance issues, and generate
-            reliable reports with one intelligent platform.
-          </p> */}
-
         </div>
 
       </div>

@@ -192,10 +192,11 @@ function Reports() {
   });
 
   return (
-    <div className="min-h-full bg-[#F6F9FC] px-8 py-6">
+    <div className="min-h-full bg-[#F6F9FC] px-8 pt-8 py-6">
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      {/* <div className="flex flex-wrap items-start justify-between gap-4"> */}
+      <div className="flex items-start justify-between pr-62">
         <div>
           <h1 className="text-3xl font-bold text-[#142B4A]">
             Reports & Analytics

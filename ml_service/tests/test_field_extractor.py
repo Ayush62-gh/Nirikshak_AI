@@ -163,7 +163,7 @@ def test_dell_mouse_flat_text_extraction():
 
     fields = extract_fields(ocr_result)
 
-    assert fields["mrp"] == "Maximum Retail Pnce 899 00 (Inclusive of all Taxes)"
+    assert fields["mrp"] == "MRP Rs. 899.00 (inclusive of all taxes)"
     assert fields["monthOfPacking"] == "08"
     assert fields["yearOfPacking"] == "2024"
     assert fields["manufacturerName"] == "NYK Techno Solutions Pvt Limited"
@@ -171,6 +171,42 @@ def test_dell_mouse_flat_text_extraction():
     assert "Anmol South City" in fields["manufacturerAddress"]
     assert "Howrah" in fields["manufacturerAddress"] or "711115" in fields["manufacturerAddress"]
     assert "1800-425-4026" in fields["consumerCare"] or "care@dell.com" in fields["consumerCare"]
+
+
+def test_dell_long_manufacturer_name_extraction():
+    """Tests extraction of full multi-word company name without over-truncation to 'Del'."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": (
+            "Manufactured by Dell International Services India Private Limited "
+            "Divyasree Greens Ground Floor Koramangala Bangalore 560071"
+        ),
+        "text_blocks": [
+            {
+                "text": "Manufactured by Dell International Services India Private Limited Divyasree Greens Ground Floor Koramangala Bangalore 560071",
+                "confidence": 0.95,
+                "box": [[0, 0], [500, 0], [500, 50], [0, 50]]
+            }
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert fields["manufacturerName"] == "Dell International Services India Private Limited"
+    assert fields["manufacturerAddress"] is not None
+    assert "Bangalore" in fields["manufacturerAddress"] or "Koramangala" in fields["manufacturerAddress"]
+
+
+def test_mrp_typo_normalization():
+    """Tests normalization of raw OCR typos in MRP string."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Retail Prce 899 00 (nclusive of all Taxes)",
+        "text_blocks": [
+            {"text": "Retail Prce 899 00 (nclusive of all Taxes)", "confidence": 0.90, "box": [[0, 0], [300, 0], [300, 40], [0, 40]]}
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert fields["mrp"] == "MRP Rs. 899.00 (inclusive of all taxes)"
+
 
 
 

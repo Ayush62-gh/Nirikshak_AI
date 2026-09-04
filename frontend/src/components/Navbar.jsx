@@ -5,9 +5,11 @@ import {
   Sun,
   Settings,
   LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getScans } from "../services/api";
 function getGreeting() {
   const hour = new Date().getHours();
 
@@ -30,7 +32,10 @@ function Navbar() {
     const isDashboard = location.pathname === "/";
 
     const [profileOpen, setProfileOpen] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [notificationsOpen, setNotificationsOpen] = useState(false);
     const profileRef = useRef(null);
+    const notificationRef = useRef(null);
 
    useEffect(() => {
     function handleClickOutside(event) {
@@ -40,6 +45,12 @@ function Navbar() {
       ) {
         setProfileOpen(false);
       }
+      if (
+      notificationRef.current &&
+      !notificationRef.current.contains(event.target)
+      ) {
+      setNotificationsOpen(false);
+    }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -48,6 +59,29 @@ function Navbar() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+  const fetchNotifications = async () => {
+    try {
+      const data = await getScans(1, 20);
+
+      const problematicScans = (data.scans || [])
+        .filter(
+          (scan) =>
+            scan.compliance?.status === "NON_COMPLIANT" ||
+            scan.compliance?.status === "PARTIAL"
+        )
+        .slice(0, 5);
+
+      setNotifications(problematicScans);
+     } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+      setNotifications([]);
+     }
+     };
+
+      fetchNotifications();
+    }, []);
 
   const handleSettings = () => {
     setProfileOpen(false);
@@ -99,19 +133,86 @@ function Navbar() {
         : "absolute right-8 top-4 z-50 flex items-center gap-5"
   }
 >
-
+      <div ref={notificationRef} className="relative">
         {/* Notification */}
         <button
+           onClick={() => setNotificationsOpen((prev) => !prev)}
           className="relative flex h-10 w-10 items-center justify-center rounded-xl text-[#12355B] transition hover:bg-[#F8FAFC]"
-          aria-label="Notifications"
+           aria-label="Notifications"
         >
           <Bell size={23} strokeWidth={1.8} />
 
-          <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#0F766E] text-[9px] font-bold text-white">
-            3
-          </span>
+         {notifications.length > 0 && (
+         <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#0F766E] text-[9px] font-bold text-white">
+          {notifications.length}
+        </span>
+      )}
         </button>
 
+{/* Notifications Dropdown */}
+{notificationsOpen && (
+  <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-[#E2E8F0] bg-white shadow-lg">
+    <div className="border-b border-[#E2E8F0] px-4 py-3">
+      <h3 className="text-sm font-bold text-[#172033]">
+        Notifications
+      </h3>
+    </div>
+
+    {notifications.length === 0 ? (
+      <div className="px-4 py-8 text-center">
+        <Bell
+          size={24}
+          className="mx-auto mb-2 text-[#94A3B8]"
+        />
+
+        <p className="text-sm font-medium text-[#64748B]">
+          No new notifications
+        </p>
+      </div>
+    ) : (
+      <div className="max-h-80 overflow-y-auto">
+        {notifications.map((scan) => {
+          const isNonCompliant =
+            scan.compliance?.status === "NON_COMPLIANT";
+
+          return (
+            <div
+              key={scan.scan_id}
+              className="border-b border-[#F1F5F9] px-4 py-3 hover:bg-[#F8FAFC]"
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                    isNonCompliant
+                      ? "bg-red-50 text-red-600"
+                      : "bg-amber-50 text-amber-600"
+                  }`}
+                >
+                  <AlertTriangle size={16} />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#172033]">
+                    {isNonCompliant
+                      ? "Non-compliant inspection"
+                      : "Inspection needs review"}
+                  </p>
+
+                  <p className="mt-0.5 truncate text-xs text-[#64748B]">
+                    {scan.product?.product_name ||
+                      scan.product?.name ||
+                      "Product inspection"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+)}
+</div>
         {/* Divider */}
         <div className="h-9 w-px bg-[#E2E8F0]" />
 

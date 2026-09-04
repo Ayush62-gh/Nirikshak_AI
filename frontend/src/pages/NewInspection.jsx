@@ -561,7 +561,7 @@ const retakePhoto = () => {
             </div>
 
             <p className="mt-5 text-sm text-[#526982]">
-              JPG, JPEG, PNG, WEBP
+              JPG, JPEG, PNG
             </p>
 
             <p className="mt-2 text-sm text-[#526982]">

@@ -59,8 +59,15 @@ function Navbar() {
   logout();
   navigate("/login");
 };
-  return (
-    <header className="flex min-h-24 items-center justify-between border-b border-[#E2E8F0] bg-white px-8">
+    // <header className="flex min-h-24 items-center justify-between border-b border-[#E2E8F0] bg-white px-8">
+    return (
+  <header
+    className={
+      isDashboard
+        ? "flex min-h-24 items-center justify-between border-b border-[#E2E8F0] bg-white px-8"
+        : "relative h-0"
+    }
+  >
       {/* Greeting - Dashboard only */}
        {isDashboard && (
         <div className="flex items-center gap-4">
@@ -84,7 +91,14 @@ function Navbar() {
 )}
 
       {/* Right Side */}
-      <div className="ml-auto flex items-center gap-5">
+      {/* <div className="ml-auto flex items-center gap-5"> */}
+      <div
+       className={
+       isDashboard
+       ? "ml-auto flex items-center gap-5"
+        : "absolute right-8 top-4 z-50 flex items-center gap-5"
+  }
+>
 
         {/* Notification */}
         <button

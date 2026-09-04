@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Camera,
   Upload,
@@ -22,6 +22,26 @@ function NewInspection() {
   const [error, setError] = useState(null);
   const [scanResult, setScanResult] = useState(null);
 
+  const [cameraOpen, setCameraOpen] = useState(false);
+const [cameraStream, setCameraStream] = useState(null);
+const [capturedImage, setCapturedImage] = useState(null);
+
+const videoRef = useRef(null);
+const canvasRef = useRef(null);
+
+  useEffect(() => {
+  return () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+    }
+  };
+}, [cameraStream]);
+useEffect(() => {
+  if (cameraOpen && cameraStream && videoRef.current && !capturedImage) {
+    videoRef.current.srcObject = cameraStream;
+  }
+}, [cameraOpen, cameraStream, capturedImage]);
+
   const handleUpload = (e) => {
     const files = Array.from(e.target.files);
 
@@ -33,7 +53,89 @@ function NewInspection() {
 
     setImages((prev) => [...prev, ...newImages]);
   };
+  const openCamera = async () => {
+  try {
+    setError(null);
 
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+      },
+      audio: false,
+    });
+
+    setCameraStream(stream);
+    setCameraOpen(true);
+
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    }, 100);
+  } catch (err) {
+    console.error("Camera error:", err);
+    setError(
+      "Unable to access camera. Please allow camera permission and try again."
+    );
+  }
+};
+
+const closeCamera = () => {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+  }
+
+  setCameraStream(null);
+  setCameraOpen(false);
+  setCapturedImage(null);
+};
+
+const capturePhoto = () => {
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
+
+  if (!video || !canvas) return;
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const context = canvas.getContext("2d");
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(
+    (blob) => {
+      if (!blob) return;
+
+      const file = new File(
+        [blob],
+        `camera-capture-${Date.now()}.jpg`,
+        { type: "image/jpeg" }
+      );
+
+      const preview = URL.createObjectURL(file);
+
+      setCapturedImage({
+        file,
+        preview,
+        name: file.name,
+      });
+    },
+    "image/jpeg",
+    0.9
+  );
+};
+
+const useCapturedPhoto = () => {
+  if (!capturedImage) return;
+
+  setImages((prev) => [...prev, capturedImage]);
+
+  closeCamera();
+};
+
+const retakePhoto = () => {
+  setCapturedImage(null);
+};
   const removeImage = (index) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
@@ -56,7 +158,7 @@ function NewInspection() {
   };
 
   return (
-    <div className="min-h-full bg-[#F6F9FC] px-8 pt-0 pb-8">
+    <div className="min-h-full bg-[#F6F9FC] px-8 pt-8 pb-8">
 
       {/* Page Heading */}
       <div className="mb-5">
@@ -89,6 +191,7 @@ function NewInspection() {
               {/* Camera */}
               <button
                 type="button"
+                 onClick={openCamera}
                 className="rounded-xl border border-[#BFE8E3] bg-[#F0FBF9] p-6 text-center transition hover:border-[#0F8F83] hover:shadow-sm"
               >
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#DDF5F1] text-[#0F8F83]">
@@ -215,10 +318,6 @@ function NewInspection() {
               <h2 className="text-xl font-bold text-[#142B4A]">
                 2. Review & Submit
               </h2>
-              <p className="mt-1 text-sm text-[#6B7F99]">
-                Submit the staged image to the backend API for compliance analysis.
-              </p>
-
               <div className="mt-4">
                 <button
                   type="button"
@@ -483,12 +582,12 @@ function NewInspection() {
             </div>
 
             <p className="mt-4 text-sm leading-6 text-[#526982]">
-              All images are processed securely and are not stored permanently.
+              All images are processed securely.
             </p>
           </div>
 
           {/* Start Inspection */}
-          <button
+          {/* <button
             type="button"
             onClick={handleSubmit}
             disabled={images.length === 0 || loading}
@@ -499,8 +598,8 @@ function NewInspection() {
                 ? "bg-[#2878D7]/80 text-white cursor-wait opacity-90"
                 : "bg-[#2878D7] text-white hover:bg-[#1F64B8] shadow-sm cursor-pointer"
             }`}
-          >
-            {loading ? (
+          > */}
+            {/* {loading ? (
               <>
                 <Loader2 size={20} className="animate-spin" />
                 <span>Analyzing...</span>
@@ -511,10 +610,102 @@ function NewInspection() {
                 <ArrowRight size={20} />
               </>
             )}
-          </button>
+          </button> */}
 
         </div>
       </div>
+            {/* Camera Modal */}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#DDE6F0] px-6 py-4">
+              <div>
+                <h2 className="text-xl font-bold text-[#142B4A]">
+                  Scan with Camera
+                </h2>
+                <p className="mt-1 text-sm text-[#6B7F99]">
+                  Capture a clear image of the package label.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCamera}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F1F5F9] text-[#526982] hover:bg-[#E2E8F0]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Camera Area */}
+            <div className="bg-[#0F172A] p-5">
+
+              {!capturedImage ? (
+                <>
+                  <div className="relative overflow-hidden rounded-xl bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="max-h-[60vh] w-full object-contain"
+                    />
+
+                    {/* Camera guide */}
+                    <div className="pointer-events-none absolute inset-6 rounded-xl border-2 border-dashed border-white/60" />
+                  </div>
+
+                  <div className="mt-5 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="flex items-center gap-2 rounded-xl bg-[#0F8F83] px-7 py-3 font-semibold text-white shadow-lg transition hover:bg-[#0B776E]"
+                    >
+                      <Camera size={20} />
+                      Capture Photo
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="overflow-hidden rounded-xl bg-black">
+                    <img
+                      src={capturedImage.preview}
+                      alt="Captured package"
+                      className="max-h-[60vh] w-full object-contain"
+                    />
+                  </div>
+
+                  <div className="mt-5 flex justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={retakePhoto}
+                      className="rounded-xl border border-white/30 bg-white/10 px-6 py-3 font-semibold text-white hover:bg-white/20"
+                    >
+                      Retake
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={useCapturedPhoto}
+                      className="flex items-center gap-2 rounded-xl bg-[#0F8F83] px-6 py-3 font-semibold text-white hover:bg-[#0B776E]"
+                    >
+                      <CheckCircle2 size={20} />
+                      Use Photo
+                    </button>
+                  </div>
+                </>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden canvas used for capturing the video frame */}
+      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 }

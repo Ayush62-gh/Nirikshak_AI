@@ -9,7 +9,7 @@ import {
 
 function InspectionVisual() {
   return (
-    <div className="relative h-[360px] w-full max-w-[560px]">
+    <div className="relative h-[310px] w-full max-w-[500px]">
 
       {/* Decorative dots */}
       <div className="absolute left-8 top-10 h-2 w-2 rounded-full bg-[#12988d]/40" />

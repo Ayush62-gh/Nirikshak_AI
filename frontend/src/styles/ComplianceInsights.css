@@ -1,0 +1,208 @@
+.insights-card {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.05fr;
+  gap: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  margin-top: 24px;
+  overflow: hidden;
+}
+
+/* Common */
+
+.compliance-section,
+.violations-section,
+.ai-insight {
+  padding: 24px;
+}
+
+.compliance-section h2,
+.violations-section h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f2747;
+}
+
+/* Compliance */
+
+.compliance-content {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-top: 24px;
+}
+
+.donut-chart {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.donut-inner {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-inner strong {
+  font-size: 22px;
+  color: #0f2747;
+}
+
+.donut-inner span {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Legend */
+
+.compliance-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.legend-row {
+  display: grid;
+  grid-template-columns: 10px auto;
+  column-gap: 9px;
+  align-items: center;
+}
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  grid-row: span 2;
+}
+
+.legend-label {
+  font-size: 14px;
+  color: #334155;
+}
+
+.legend-value {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Violations */
+
+.violations-section {
+  border-left: 1px solid #e2e8f0;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-heading button {
+  border: none;
+  background: transparent;
+  color: #07877f;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.violations-list {
+  margin-top: 18px;
+}
+
+.violation-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.violation-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.violation-icon.danger {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.violation-icon.warning {
+  background: #ffedd5;
+  color: #f59e0b;
+}
+
+.violation-icon.info {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.violation-name {
+  flex: 1;
+  font-size: 14px;
+  color: #334155;
+}
+
+.violation-count {
+  font-size: 15px;
+}
+
+.violation-count.danger {
+  color: #ef4444;
+}
+
+.violation-count.warning {
+  color: #f59e0b;
+}
+
+.violation-count.info {
+  color: #2563eb;
+}
+
+/* AI Insight */
+
+.ai-insight {
+  background: #f0fdfa;
+  margin: 20px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.ai-insight-icon {
+  color: #0f9d94;
+  flex-shrink: 0;
+}
+
+.ai-insight h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #0f766e;
+}
+
+.ai-insight p {
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}

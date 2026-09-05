@@ -1,0 +1,30 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python cache & artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Image output/test folders
+input_images/
+processed_images/
+annotated_images/
+
+# Tests
+tests/
+
+# Git and IDE files
+.git/
+.gitignore
+.ds_store
+.vscode/
+.idea/
+
+# Deployment & Environment docs/configs
+.env
+HF_DEPLOYMENT.md

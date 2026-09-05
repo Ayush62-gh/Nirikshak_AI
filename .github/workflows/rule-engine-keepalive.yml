@@ -1,0 +1,13 @@
+name: Keep Rule Engine Awake
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping rule engine health endpoint
+        run: |
+          curl -sf -o /dev/null -w "Status: %{http_code}, Time: %{time_total}s\n" \
+            https://nirikshak-rule-engine.onrender.com/health || echo "Ping failed"

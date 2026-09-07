@@ -1,13 +1,14 @@
-fastapi
-uvicorn
-sqlalchemy
-pydantic-settings
-python-multipart
-httpx
-pytest
-PyJWT
-passlib[bcrypt]
-bcrypt
-email-validator
-Pillow
+fastapi>=0.100.0,<1.0.0
+uvicorn>=0.20.0,<1.0.0
+sqlalchemy>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+python-multipart>=0.0.6
+httpx>=0.24.0,<1.0.0
+pytest>=8.0.0
+PyJWT>=2.8.0,<3.0.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+email-validator>=2.0.0
+Pillow>=10.0.0
+
 

@@ -14,6 +14,14 @@ class ExternalServiceError(Exception):
         super().__init__(self.detail)
 
 
+class ExternalServiceRateLimitError(Exception):
+    """Raised when an external service (e.g. Rule Engine) returns HTTP 429 Rate Limited."""
+    def __init__(self, detail: str = "Rate limit exceeded. Please try again later.", retry_after: str | None = None):
+        self.detail = detail
+        self.retry_after = retry_after
+        super().__init__(self.detail)
+
+
 async def external_service_error_handler(request: Request, exc: ExternalServiceError):
     logger.error(f"ExternalServiceError on path {request.url.path}: {exc.detail}")
     return JSONResponse(
@@ -22,6 +30,21 @@ async def external_service_error_handler(request: Request, exc: ExternalServiceE
             error="external_service_error",
             detail=exc.detail,
         ).model_dump(),
+    )
+
+
+async def external_service_rate_limit_error_handler(request: Request, exc: ExternalServiceRateLimitError):
+    logger.warning(f"ExternalServiceRateLimitError on path {request.url.path}: {exc.detail}")
+    headers = {}
+    if exc.retry_after:
+        headers["Retry-After"] = str(exc.retry_after)
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content=ErrorResponse(
+            error="rate_limit_exceeded",
+            detail=exc.detail,
+        ).model_dump(),
+        headers=headers,
     )
 
 
@@ -49,5 +72,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ExternalServiceError, external_service_error_handler)
+    app.add_exception_handler(ExternalServiceRateLimitError, external_service_rate_limit_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
     app.add_exception_handler(Exception, generic_exception_handler)

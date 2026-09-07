@@ -1,9 +1,12 @@
 import os
 import uuid
+import logging
 from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
+
+logger = logging.getLogger("nirikshak.db")
 
 Base = declarative_base()
 
@@ -57,8 +60,9 @@ def _migrate_add_user_id_column() -> None:
             conn.commit()
 
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Database user_id column migration check failed: {exc}", exc_info=True)
+
 
 
 def init_db() -> None:

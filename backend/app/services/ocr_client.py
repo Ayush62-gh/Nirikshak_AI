@@ -8,8 +8,16 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_ocr_response(response: dict) -> dict:
-    fields = response.get("fields") or {}
-    quality = response.get("quality") or {}
+    if not isinstance(response, dict):
+        raise ExternalServiceError("OCR service returned invalid or non-dictionary response payload.")
+
+    fields = response.get("fields")
+    if not isinstance(fields, dict):
+        fields = {}
+
+    quality = response.get("quality")
+    if not isinstance(quality, dict):
+        quality = {}
 
     month = fields.get("monthOfPacking")
     year = fields.get("yearOfPacking")
@@ -61,7 +69,8 @@ async def extract_fields(image_bytes: bytes, filename: str) -> dict:
     # REAL SERVICE INTEGRATION
     ocr_url = f"{settings.OCR_SERVICE_URL.rstrip('/')}/extract"
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        timeout = httpx.Timeout(30.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             files = {"file": (filename, image_bytes, "image/jpeg")}
             response = await client.post(ocr_url, files=files)
             response.raise_for_status()
@@ -75,6 +84,9 @@ async def extract_fields(image_bytes: bytes, filename: str) -> dict:
                 )
 
             return parsed
-    except (httpx.HTTPError, ValueError, KeyError) as err:
+    except ExternalServiceError:
+        raise
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as err:
         raise ExternalServiceError(f"OCR service request failed: {str(err)}") from err
+
 

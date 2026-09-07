@@ -2,9 +2,6 @@ easyocr
 opencv-python
 Pillow
 numpy
-torch
-torchvision
-pytest
 fastapi
 uvicorn
-python-multipart
+python-multipart

@@ -23,6 +23,7 @@ WORKDIR /app
 
 # Copy requirements and install Python packages first to leverage Docker layer caching
 COPY requirements.txt .
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.14.0+cpu torchvision==0.29.0+cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download EasyOCR model weights during build so they are baked into the image

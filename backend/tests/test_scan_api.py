@@ -311,3 +311,54 @@ def test_user_scan_isolation():
     assert scan_id_a in ids_a
 
 
+def test_post_scan_rule_engine_rate_limit_returns_429(monkeypatch):
+    from app.services import rule_client
+    from app.core.errors import ExternalServiceRateLimitError
+
+    headers = get_auth_header()
+
+    async def mock_rate_limit(*args, **kwargs):
+        raise ExternalServiceRateLimitError("Rule Engine rate limit exceeded", retry_after="60")
+
+    monkeypatch.setattr(rule_client, "validate_compliance", mock_rate_limit)
+
+    jpeg_bytes = make_test_jpeg_bytes()
+    files = {"image": ("test_label.jpg", jpeg_bytes, "image/jpeg")}
+
+    response = client.post("/api/scan", files=files, headers=headers)
+    assert response.status_code == 429
+    data = response.json()
+    assert data["error"] == "rate_limit_exceeded"
+    assert data["detail"] == "Rule Engine rate limit exceeded"
+    assert response.headers.get("retry-after") == "60"
+
+
+def test_post_scan_failure_prevents_db_persistence(monkeypatch):
+    from app.services import ocr_client
+    from app.core.errors import ExternalServiceError
+
+    headers = get_auth_header()
+
+    # Get initial scans count
+    initial_list = client.get("/api/scans", headers=headers).json()
+    initial_total = initial_list["total"]
+
+    # Mock OCR client failure
+    async def mock_ocr_failure(*args, **kwargs):
+        raise ExternalServiceError("OCR microservice unavailable")
+
+    monkeypatch.setattr(ocr_client, "extract_fields", mock_ocr_failure)
+
+    jpeg_bytes = make_test_jpeg_bytes()
+    files = {"image": ("test_label.jpg", jpeg_bytes, "image/jpeg")}
+
+    response = client.post("/api/scan", files=files, headers=headers)
+    assert response.status_code == 502
+    assert response.json()["error"] == "external_service_error"
+
+    # Verify no new scan was added to DB
+    final_list = client.get("/api/scans", headers=headers).json()
+    assert final_list["total"] == initial_total
+
+
+

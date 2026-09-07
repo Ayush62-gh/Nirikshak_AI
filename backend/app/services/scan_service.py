@@ -1,7 +1,7 @@
 from app.services import ocr_client, rule_client
 from app.db.session import save_scan, get_scan
 from app.schemas.scan_schemas import ScanResponse
-from app.core.errors import ExternalServiceError
+from app.core.errors import ExternalServiceError, ExternalServiceRateLimitError
 
 
 async def process_scan(image_bytes: bytes, filename: str, user_id: str) -> ScanResponse:
@@ -19,7 +19,7 @@ async def process_scan(image_bytes: bytes, filename: str, user_id: str) -> ScanR
 
         # 2. Rule Engine Compliance Validation
         compliance_result = await rule_client.validate_compliance(extracted_fields)
-    except ExternalServiceError:
+    except (ExternalServiceError, ExternalServiceRateLimitError):
         raise
     except Exception as exc:
         raise ExternalServiceError(f"External service processing failed: {str(exc)}") from exc

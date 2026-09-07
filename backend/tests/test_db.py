@@ -1,5 +1,6 @@
 import os
 import pytest
+import uuid
 from app.db.session import init_db, save_scan, get_scan, list_scans
 
 
@@ -9,7 +10,9 @@ def setup_database():
 
 
 def test_save_get_and_list_scans():
+    user_id = str(uuid.uuid4())
     sample_scan = {
+        "user_id": user_id,
         "product_name": "Test Milk Powder",
         "manufacturer": "Nirikshak Foods Ltd",
         "net_quantity": "500g",
@@ -24,15 +27,16 @@ def test_save_get_and_list_scans():
     }
 
     # 1. Save scan
-    scan_id = save_scan(sample_scan)
+    scan_id = save_scan(sample_scan, user_id=user_id)
     assert isinstance(scan_id, str)
     assert len(scan_id) > 0
 
     # 2. Get scan and verify data matches
-    retrieved_scan = get_scan(scan_id)
+    retrieved_scan = get_scan(scan_id, user_id=user_id)
     assert retrieved_scan is not None
     assert isinstance(retrieved_scan, dict)
     assert retrieved_scan["scan_id"] == scan_id
+    assert retrieved_scan["user_id"] == user_id
     assert retrieved_scan["product_name"] == "Test Milk Powder"
     assert retrieved_scan["manufacturer"] == "Nirikshak Foods Ltd"
     assert retrieved_scan["net_quantity"] == "500g"
@@ -41,7 +45,8 @@ def test_save_get_and_list_scans():
     assert retrieved_scan["extracted_fields"] == {"raw_ocr": "Test Milk Powder 500g Rs. 250"}
 
     # 3. List scans and verify saved scan is in results
-    scans_list = list_scans(page=1, limit=10)
+    scans_list = list_scans(user_id=user_id, page=1, limit=10)
     assert isinstance(scans_list, list)
     scan_ids = [s["scan_id"] for s in scans_list]
     assert scan_id in scan_ids
+

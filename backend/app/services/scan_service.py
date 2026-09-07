@@ -4,7 +4,7 @@ from app.schemas.scan_schemas import ScanResponse
 from app.core.errors import ExternalServiceError
 
 
-async def process_scan(image_bytes: bytes, filename: str) -> ScanResponse:
+async def process_scan(image_bytes: bytes, filename: str, user_id: str) -> ScanResponse:
     """
     Orchestrates the label scan pipeline:
     1. Extract fields via OCR client
@@ -27,6 +27,7 @@ async def process_scan(image_bytes: bytes, filename: str) -> ScanResponse:
     # 3. Build flat dictionary structure for database layer
     image_ref = f"uploads/{filename}" if filename else "uploads/scanned_image.jpg"
     flat_scan_data = {
+        "user_id": user_id,
         "product_name": extracted_fields.get("product_name"),
         "manufacturer": extracted_fields.get("manufacturer"),
         "net_quantity": extracted_fields.get("net_quantity"),
@@ -41,10 +42,10 @@ async def process_scan(image_bytes: bytes, filename: str) -> ScanResponse:
     }
 
     # 4. Save scan to database
-    scan_id = save_scan(flat_scan_data)
+    scan_id = save_scan(flat_scan_data, user_id=user_id)
 
     # 5. Get saved row from database
-    row = get_scan(scan_id)
+    row = get_scan(scan_id, user_id=user_id)
     if not row:
         raise RuntimeError("Failed to retrieve scan after saving to database.")
 

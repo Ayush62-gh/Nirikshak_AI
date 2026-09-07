@@ -49,7 +49,12 @@ def test_external_service_error_handling(monkeypatch):
 
     monkeypatch.setattr(ocr_client, "extract_fields", mock_failed_extract)
 
-    fake_image_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00\x48\x00\x48\x00\x00\xFF\xD9"
+    import io
+    from PIL import Image
+    img = Image.new("RGB", (10, 10), color="blue")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    fake_image_bytes = buf.getvalue()
     files = {"image": ("test.jpg", fake_image_bytes, "image/jpeg")}
 
     response = client.post("/api/scan", files=files, headers=headers)

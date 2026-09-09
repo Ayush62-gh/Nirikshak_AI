@@ -69,7 +69,7 @@ async def extract_fields(image_bytes: bytes, filename: str) -> dict:
     # REAL SERVICE INTEGRATION
     ocr_url = f"{settings.OCR_SERVICE_URL.rstrip('/')}/extract"
     try:
-        timeout = httpx.Timeout(30.0, connect=5.0)
+        timeout = httpx.Timeout(90.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             files = {"file": (filename, image_bytes, "image/jpeg")}
             response = await client.post(ocr_url, files=files)

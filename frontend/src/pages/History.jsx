@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { getScans, getScanById } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { generateComplianceReportPDF } from "../utils/reportGenerator";
 import {
   Search,
   CalendarDays,
@@ -16,7 +19,7 @@ import {
   ShieldAlert,
   RefreshCw,
 } from "lucide-react";
-import { getScans, getScanById } from "../services/api";
+//import { getScans, getScanById } from "../services/api";
 import "../styles/History.css";
 
 const statusConfig = {
@@ -80,6 +83,7 @@ function formatTimestamp(isoString) {
 }
 
 function History() {
+  const { user } = useAuth();
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -89,6 +93,7 @@ function History() {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All Status");
+  const [dateRange, setDateRange] = useState("All Time");
 
   // Modal details state
   const [selectedScanId, setSelectedScanId] = useState(null);
@@ -131,7 +136,15 @@ function History() {
       isMounted = false;
     };
   }, [page, limit]);
-
+  const handleExportReport = async (scan) => {
+  try {
+    const scanData = await getScanById(scan.scan_id);
+    generateComplianceReportPDF(scanData, user);
+  } catch (err) {
+    console.error("Failed to generate compliance report:", err);
+    alert(err.message || "Failed to generate compliance report.");
+  }
+};
   const handleOpenDetails = async (scanId) => {
     setSelectedScanId(scanId);
     setDetailsLoading(true);
@@ -189,8 +202,32 @@ function History() {
     const displayStatus = mapComplianceStatus(scan.compliance?.status);
     const matchesStatus =
       status === "All Status" || displayStatus === status;
+    const matchesDateRange = (() => {
+  if (dateRange === "All Time") return true;
 
-    return matchesSearch && matchesStatus;
+  if (!scan.timestamp) return false;
+
+  const scanDate = new Date(scan.timestamp);
+  const now = new Date();
+
+  if (dateRange === "Today") {
+    return scanDate.toDateString() === now.toDateString();
+  }
+
+  const diffInDays = (now - scanDate) / (1000 * 60 * 60 * 24);
+
+  if (dateRange === "Last 7 Days") {
+    return diffInDays >= 0 && diffInDays <= 7;
+  }
+
+  if (dateRange === "Last 30 Days") {
+    return diffInDays >= 0 && diffInDays <= 30;
+  }
+
+  return true;
+})();
+
+    return matchesSearch && matchesStatus && matchesDateRange;
   });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -219,11 +256,21 @@ function History() {
           />
         </div>
 
-        <button className="filter-btn">
+        {/* <button className="filter-btn">
           <CalendarDays size={18} />
           <span>Date Range</span>
           <ChevronDown size={16} />
-        </button>
+        </button> */}
+        <select
+           className="filter-btn"
+          value={dateRange}
+          onChange={(e) => setDateRange(e.target.value)}
+          >
+        <option value="All Time">All Time</option>
+        <option value="Today">Today</option>
+        <option value="Last 7 Days">Last 7 Days</option>
+        <option value="Last 30 Days">Last 30 Days</option>
+          </select>
 
         <select
           className="filter-btn status-filter"
@@ -236,10 +283,20 @@ function History() {
           <option>Non-Compliant</option>
         </select>
 
-        <button className="export-btn">
-          <Download size={18} />
-          Export Report
-        </button>
+        <button
+  className="export-btn"
+  onClick={() => {
+    if (filteredInspections.length === 0) {
+      alert("No inspection available to export.");
+      return;
+    }
+
+    handleExportReport(filteredInspections[0]);
+  }}
+>
+  <Download size={18} />
+  Export Report
+</button>
 
       </div>
 
@@ -646,6 +703,14 @@ function History() {
 
             {/* Modal Footer */}
             <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+              <button
+              onClick={() => generateComplianceReportPDF(scanDetails, user)}
+              disabled={!scanDetails}
+              className="mr-3 flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+              >
+             <Download size={17} />
+            Download Report
+              </button>
               <button
                 onClick={handleCloseDetails}
                 className="rounded-xl bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors"

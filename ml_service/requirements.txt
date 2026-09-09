@@ -2,6 +2,10 @@
 paddlepaddle==3.0.0
 paddleocr==2.10.0
 
+# Required by paddle's C++ extension loader at import time - not
+# bundled by default in fresh Python 3.12+ venvs
+setuptools
+
 # Image processing (cv2, PIL used by paddle_ocr, preprocess, quality_checker)
 opencv-python
 Pillow

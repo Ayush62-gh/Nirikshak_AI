@@ -20,8 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy requirements and install Python packages first to leverage Docker layer caching
-# NOTE: torch is included because paddleocr==2.10.0 imports albumentations, which
-# unconditionally does `from .pytorch import *` → `import torch` in its __init__.
+# setuptools is required by paddle's C++ extension loader at import time (see requirements.txt).
 # torchvision and easyocr are NOT included.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

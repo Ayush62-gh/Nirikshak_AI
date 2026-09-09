@@ -1,10 +1,21 @@
-easyocr
+# Core OCR engine
+paddlepaddle==3.0.0
+paddleocr==2.10.0
+
+# torch is a genuine transitive requirement of paddleocr==2.10.0:
+# paddleocr -> albumentations -> from .pytorch import * -> import torch (unconditional)
+# torchvision is NOT required — only torch itself is pulled by albumentations.
+torch
+
+# Image processing (cv2, PIL used by paddle_ocr, preprocess, quality_checker)
 opencv-python
 Pillow
 numpy
-torch
-torchvision
-pytest
+
+# API server
 fastapi
-uvicorn
-python-multipart
+uvicorn[standard]
+python-multipart
+
+# Testing (not deployed, but needed for CI)
+pytest

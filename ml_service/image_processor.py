@@ -1,7 +1,8 @@
 import json
+import os
 import sys
 
-from ocr import extract_text
+import paddle_ocr
 from preprocess import preprocess_product_image
 from quality_checker import check_image_quality
 
@@ -13,7 +14,6 @@ def create_processing_error(error_code, message, quality=None):
     Success result final required format mein hoga.
     Error result mein debugging ke liye success, error aur message extra hain.
     """
-
     return {
         "success": False,
         "error": error_code,
@@ -26,18 +26,19 @@ def create_processing_error(error_code, message, quality=None):
     }
 
 
-def process_product_image(image_path):
+def process_product_image(image_path, ocr_engine=None):
     """
     Ek product image ka complete OCR pipeline run karta hai.
 
     Steps:
     1. Original image ki quality check
     2. Image preprocessing
-    3. Processed image par OCR
+    3. Processed/original image par OCR (PaddleOCR PP-OCRv3 by default, EasyOCR fallback available)
     4. Annotated image generation
     5. Final JSON-serializable result return
     """
-
+    if ocr_engine is None:
+        ocr_engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
     # Step 1: Original image ki quality check
     quality_result = check_image_quality(image_path)
 
@@ -78,12 +79,21 @@ def process_product_image(image_path):
         "processed_image_path"
     ]
 
-    # Step 3: Processed image par OCR aur annotation
-    ocr_result = extract_text(
-        image_path=processed_image_path,
-        create_annotation=True,
-        annotation_folder="annotated_images"
-    )
+    # Step 3: OCR execution
+    if ocr_engine in ("easyocr", "easy_ocr", "easy"):
+        import ocr  # lazy: only loaded when EasyOCR path is explicitly requested
+        ocr_result = ocr.extract_text(
+            image_path=processed_image_path,
+            create_annotation=True,
+            annotation_folder="annotated_images"
+        )
+    else:
+        # PaddleOCR PP-OCRv3 primary path
+        ocr_result = paddle_ocr.extract_text(
+            image_path=image_path,
+            create_annotation=True,
+            annotation_folder="annotated_images"
+        )
 
     if not ocr_result.get("success"):
         return create_processing_error(
@@ -125,19 +135,21 @@ def process_product_image(image_path):
         ),
         "annotated_image_path": (
             str(ocr_result["annotated_image_path"])
-            if ocr_result["annotated_image_path"] is not None
+            if ocr_result.get("annotated_image_path") is not None
             else None
         )
     }
 
-def process_product_images(image_paths):
+
+def process_product_images(image_paths, ocr_engine=None):
     """
     Same product ki multiple images process karta hai.
 
     Example:
     Front image, back image and side image.
     """
-
+    if ocr_engine is None:
+        ocr_engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
     if not isinstance(image_paths, (list, tuple)):
         return {
             "success": False,
@@ -170,10 +182,10 @@ def process_product_images(image_paths):
 
     for image_path in image_paths:
         image_result = process_product_image(
-            image_path
+            image_path,
+            ocr_engine=ocr_engine
         )
 
-        # Input path bhi result ke saath preserve kar rahe hain
         result_with_path = {
             "input_image_path": str(image_path),
             **image_result
@@ -206,22 +218,20 @@ def process_product_images(image_paths):
         "results": results
     }
 
+
 def main():
     """
     Terminal se single ya multiple images test karta hai.
     """
-
     if len(sys.argv) < 2:
         result = create_processing_error(
             error_code="IMAGE_PATH_REQUIRED",
             message="At least one image path is required."
         )
-
     elif len(sys.argv) == 2:
         result = process_product_image(
             sys.argv[1]
         )
-
     else:
         result = process_product_images(
             sys.argv[1:]

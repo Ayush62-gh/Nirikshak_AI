@@ -190,12 +190,13 @@ def test_final_required_output_format(monkeypatch):
         }
     )
 
+    import paddle_ocr as _paddle_ocr
     monkeypatch.setattr(
-        image_processor,
+        _paddle_ocr,
         "extract_text",
         lambda image_path,
-        create_annotation,
-        annotation_folder: {
+        create_annotation=True,
+        annotation_folder="annotated_images": {
             "success": True,
             "full_text": "MRP Rs 120",
             "text_blocks": [
@@ -233,7 +234,7 @@ def test_final_required_output_format(monkeypatch):
 def test_multiple_image_support(monkeypatch):
     """Multiple images ke counts aur combined text check karta hai."""
 
-    def fake_process_product_image(image_path):
+    def fake_process_product_image(image_path, ocr_engine="paddle"):
         return {
             "quality": {
                 "blur_score": 150.0,

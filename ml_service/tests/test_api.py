@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-import ocr
+import image_processor
+import paddle_ocr
 from api import app
 
 
@@ -38,20 +39,17 @@ def test_extract_endpoint_valid_image(tmp_path, monkeypatch):
     image_path = tmp_path / "test_product.jpg"
     create_dummy_image(image_path)
 
-    class FakeReader:
-        def readtext(self, image, detail, paragraph):
-            return [
-                (
-                    [[10, 20], [200, 20], [200, 60], [10, 60]],
-                    "MRP Rs 120",
-                    np.float32(0.95)
-                )
-            ]
+    class FakePaddleReader:
+        def ocr(self, image, cls=False):
+            return [[[
+                [[10, 20], [200, 20], [200, 60], [10, 60]],
+                ("MRP Rs 120", np.float32(0.95))
+            ]]]
 
     monkeypatch.setattr(
-        ocr.easyocr,
-        "Reader",
-        lambda *args, **kwargs: FakeReader()
+        paddle_ocr,
+        "get_paddle_reader",
+        lambda: FakePaddleReader()
     )
 
     with TestClient(app) as client:
@@ -105,8 +103,8 @@ def test_extract_endpoint_corrupt_image(tmp_path):
         assert response.json()["detail"] is not None
 
 
-def test_easyocr_singleton_loaded_once_at_startup(tmp_path, monkeypatch):
-    """Confirms EasyOCR.Reader is instantiated only once at service startup, not per request."""
+def test_paddle_singleton_loaded_once_at_startup(tmp_path, monkeypatch):
+    """Confirms PaddleOCR reader is instantiated only once at service startup, not per request."""
     init_count = 0
 
     class CountingReader:
@@ -114,25 +112,29 @@ def test_easyocr_singleton_loaded_once_at_startup(tmp_path, monkeypatch):
             nonlocal init_count
             init_count += 1
 
-        def readtext(self, image, detail, paragraph):
+        def ocr(self, image, cls=False):
             return []
 
-    monkeypatch.setattr(ocr.easyocr, "Reader", CountingReader)
+    paddle_ocr.reset_paddle_reader()
+    monkeypatch.setattr(paddle_ocr, "_load_paddle_ocr", lambda: CountingReader())
 
     image_path = tmp_path / "test.jpg"
     create_dummy_image(image_path)
 
-    with TestClient(app) as client:
-        # Service startup lifespan initialized the reader once
-        assert init_count == 1
+    try:
+        with TestClient(app) as client:
+            # Service startup lifespan initialized the reader once
+            assert init_count == 1
 
-        with open(image_path, "rb") as f1:
-            res1 = client.post("/extract", files={"file": ("test.jpg", f1, "image/jpeg")})
-            assert res1.status_code == 200
+            with open(image_path, "rb") as f1:
+                res1 = client.post("/extract", files={"file": ("test.jpg", f1, "image/jpeg")})
+                assert res1.status_code == 200
 
-        with open(image_path, "rb") as f2:
-            res2 = client.post("/extract", files={"file": ("test.jpg", f2, "image/jpeg")})
-            assert res2.status_code == 200
+            with open(image_path, "rb") as f2:
+                res2 = client.post("/extract", files={"file": ("test.jpg", f2, "image/jpeg")})
+                assert res2.status_code == 200
 
-        # init_count must remain 1 after multiple requests
-        assert init_count == 1
+            # init_count must remain 1 after multiple requests
+            assert init_count == 1
+    finally:
+        paddle_ocr.reset_paddle_reader()

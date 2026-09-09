@@ -3,34 +3,34 @@ import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import easyocr
 from fastapi import FastAPI, File, HTTPException, UploadFile
 import uvicorn
 
 import image_processor
-import ocr
+import paddle_ocr
 from field_extractor import extract_fields
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-
-_reader_singleton = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     FastAPI lifespan handler:
-    Loads EasyOCR.Reader as a singleton at service startup.
-    This avoids repeated model-loading overhead on every request.
+    Loads the configured OCR reader singleton (PaddleOCR by default, or EasyOCR
+    if OCR_ENGINE=easyocr) at service startup to avoid repeated model-loading overhead.
     """
-    global _reader_singleton
-    print("Loading EasyOCR.Reader singleton at startup...", flush=True)
-    _reader_singleton = easyocr.Reader(["en", "hi"], gpu=False, verbose=False)
-
-    # Patch easyocr.Reader in easyocr and ocr modules to return the singleton
-    easyocr.Reader = lambda *args, **kwargs: _reader_singleton
-    ocr.easyocr.Reader = lambda *args, **kwargs: _reader_singleton
-
+    engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
+    if engine in ("easyocr", "easy_ocr", "easy"):
+        import easyocr
+        import ocr
+        print("Loading EasyOCR.Reader singleton at startup...", flush=True)
+        _reader = easyocr.Reader(["en", "hi"], gpu=False, verbose=False)
+        easyocr.Reader = lambda *args, **kwargs: _reader
+        ocr.easyocr.Reader = lambda *args, **kwargs: _reader
+    else:
+        print("Loading PaddleOCR PP-OCRv3 reader singleton at startup...", flush=True)
+        paddle_ocr.get_paddle_reader()
     yield
 
 

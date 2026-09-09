@@ -9,12 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
 # The PORT environment variable allows overriding the port if needed.
 ENV PORT=7860
 
-# Install system dependencies required by OpenCV (cv2) and EasyOCR / PyTorch
+# System dependencies required by OpenCV (cv2) and PaddlePaddle CPU inference
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,11 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy requirements and install Python packages first to leverage Docker layer caching
+# NOTE: torch is included because paddleocr==2.10.0 imports albumentations, which
+# unconditionally does `from .pytorch import *` → `import torch` in its __init__.
+# torchvision and easyocr are NOT included.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download EasyOCR model weights during build so they are baked into the image
-RUN python -c "import easyocr; easyocr.Reader(['en', 'hi'], gpu=False)"
+# Pre-download PaddleOCR PP-OCRv3 English det + rec model weights during build
+# so they are baked into the image and do not download at container startup.
+RUN python -c "\
+from paddleocr import PaddleOCR; \
+PaddleOCR(lang='en', use_gpu=False, use_angle_cls=False, \
+          enable_mkldnn=False, show_log=False, ocr_version='PP-OCRv3')"
 
 # Copy application source code
 COPY . .

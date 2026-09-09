@@ -408,7 +408,7 @@ def test_count_quantity_and_context_limited_in_normalization():
             {"text": "IN", "confidence": 0.80, "box": [[220, 0], [250, 0], [250, 20], [220, 20]]},
         ],
     })
-    assert labeled["netQuantity"] == "1N"
+    assert labeled["netQuantity"] is None
 
     unrelated = extract_fields({
         "quality": {"quality_status": "ACCEPTABLE"},
@@ -553,7 +553,424 @@ def test_mrp_label_without_numeric_value_is_none():
     assert result["mrp"] is None
 
 
+def test_observed_label_layout_reconstructs_fields_without_inventing_quantity():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "SELECT Common Genenc Name D Select Wireless Mouse DS320 Marketed By Del International Services India Private Limited Crysta Downs EGL Business Park Domlur Bengaluru 56007 Mocel Number 0$320 Couniyo Oriqin India Number of Units Ouanny Month and Yearof Manulacture AUGUS 2024 Maximum Retail Prce 899 00 Telephone 1800-3099-807",
+        "text_blocks": [
+            {"text": "SELECT", "confidence": 0.99, "box": [[0, 0], [80, 0], [80, 20], [0, 20]]},
+            {"text": "Common Genenc Name", "confidence": 0.72, "box": [[0, 30], [180, 30], [180, 50], [0, 50]]},
+            {"text": "D Select Wireless Mouse DS320", "confidence": 0.19, "box": [[0, 55], [240, 55], [240, 75], [0, 75]]},
+            {"text": "Marketed By Del", "confidence": 0.72, "box": [[0, 90], [150, 90], [150, 110], [0, 110]]},
+            {"text": "International Services India Private Limited", "confidence": 0.72, "box": [[0, 115], [300, 115], [300, 135], [0, 135]]},
+            {"text": "Crysta Downs EGL Business Park Domlur Bengaluru 56007", "confidence": 0.70, "box": [[0, 140], [360, 140], [360, 160], [0, 160]]},
+            {"text": "Mocel Number", "confidence": 0.70, "box": [[0, 180], [150, 180], [150, 200], [0, 200]]},
+            {"text": "0$320", "confidence": 0.70, "box": [[0, 205], [80, 205], [80, 225], [0, 225]]},
+            {"text": "Couniyo Oriqin", "confidence": 0.51, "box": [[0, 240], [150, 240], [150, 260], [0, 260]]},
+            {"text": "India", "confidence": 0.99, "box": [[160, 240], [220, 240], [220, 260], [160, 260]]},
+            {"text": "Number of Units", "confidence": 0.80, "box": [[0, 275], [150, 275], [150, 295], [0, 295]]},
+            {"text": "Ouanny", "confidence": 0.60, "box": [[160, 275], [220, 275], [220, 295], [160, 295]]},
+            {"text": "Month and Yearof Manulacture", "confidence": 0.32, "box": [[0, 310], [240, 310], [240, 330], [0, 330]]},
+            {"text": "AUGUS", "confidence": 0.99, "box": [[0, 335], [80, 335], [80, 355], [0, 355]]},
+            {"text": "2024", "confidence": 0.99, "box": [[90, 335], [150, 335], [150, 355], [90, 355]]},
+            {"text": "Maximum Retail Prce 899 00 (nclusive of all Taxes)", "confidence": 0.90, "box": [[0, 370], [350, 370], [350, 390], [0, 390]]},
+            {"text": "Telephone 1800-3099-807", "confidence": 0.90, "box": [[0, 405], [220, 405], [220, 425], [0, 425]]},
+        ],
+    })
+    assert result["productName"] == "D Select Wireless Mouse DS320"
+    assert result["manufacturerName"] == "Del International Services India Private Limited"
+    assert "Crysta Downs" in result["manufacturerAddress"]
+    assert "Mocel" not in result["manufacturerAddress"]
+    assert result["countryOfOrigin"] == "India"
+    assert result["monthOfPacking"] == "08"
+    assert result["yearOfPacking"] == "2024"
+    assert result["netQuantity"] is None
+    assert "899.00" in result["mrp"]
+    assert result["consumerCare"] == "1800-3099-807"
 
 
+def test_catch_fragmented_origin_and_safe_missing_statutory_values():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Iet lleght 200g PRODUCT OF INDM trPa ofce DH RANIPAL SATYAPAL FOODS 91-120 4832860 foods@dsgroup.com",
+        "text_blocks": [
+            {"text": "Iet lleght", "confidence": 0.30, "box": [[0, 0], [100, 0], [100, 20], [0, 20]]},
+            {"text": "200g", "confidence": 0.90, "box": [[0, 30], [70, 30], [70, 50], [0, 50]]},
+            {"text": "PRODUCT", "confidence": 0.90, "box": [[0, 70], [80, 70], [80, 90], [0, 90]]},
+            {"text": "OF INDM", "confidence": 0.90, "box": [[85, 70], [160, 70], [160, 90], [85, 90]]},
+            {"text": "trPa ofce", "confidence": 0.30, "box": [[0, 110], [100, 110], [100, 130], [0, 130]]},
+            {"text": "DH RANIPAL SATYAPAL FOODS", "confidence": 0.70, "box": [[105, 110], [300, 110], [300, 130], [105, 130]]},
+            {"text": "91-120 4832860 foods@dsgroup.com", "confidence": 0.90, "box": [[0, 150], [260, 150], [260, 170], [0, 170]]},
+        ],
+    })
+    assert result["netQuantity"] == "200g"
+    assert result["countryOfOrigin"] == "India"
+    assert result["mrp"] is None
+    assert result["monthOfPacking"] is None
+    assert result["yearOfPacking"] is None
+    assert "@" not in result["manufacturerName"]
+
+
+def test_manufacturer_address_uses_plausible_blocks_and_split_boundaries():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Marketed By Example Services Private Limited First Road Second Area Village Mocel Number ABC123 Couniyo Oriqin India",
+        "text_blocks": [
+            {"text": "Marketed By Example Services Private Limited", "confidence": 0.90, "box": [[0, 0], [300, 0], [300, 20], [0, 20]]},
+            {"text": "First Road", "confidence": 0.90, "box": [[0, 30], [120, 30], [120, 50], [0, 50]]},
+            {"text": "Second Area", "confidence": 0.90, "box": [[0, 55], [140, 55], [140, 75], [0, 75]]},
+            {"text": "Village", "confidence": 0.90, "box": [[500, 80], [500, 145], [520, 145], [520, 80]]},
+            {"text": "Mocel", "confidence": 0.80, "box": [[0, 100], [70, 100], [70, 120], [0, 120]]},
+            {"text": "Number", "confidence": 0.80, "box": [[75, 100], [145, 100], [145, 120], [75, 120]]},
+            {"text": "ABC123", "confidence": 0.90, "box": [[0, 125], [90, 125], [90, 145], [0, 145]]},
+            {"text": "Couniyo Oriqin", "confidence": 0.70, "box": [[0, 160], [150, 160], [150, 180], [0, 180]]},
+            {"text": "India", "confidence": 0.95, "box": [[160, 160], [220, 160], [220, 180], [160, 180]]},
+        ],
+    })
+
+    assert result["manufacturerName"] == "Example Services Private Limited"
+    assert result["manufacturerAddress"] == "First Road Second Area"
+    assert "Village" not in result["manufacturerAddress"]
+    assert "ABC123" not in result["manufacturerAddress"]
+    assert "Couniyo" not in result["manufacturerAddress"]
+    assert result["countryOfOrigin"] == "India"
+
+
+def test_manufacturer_address_preserves_valid_multi_block_continuation():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Manufactured by Example Foods Limited Plot 12 Industrial Area Sector 5 Model Number ZX9",
+        "text_blocks": [
+            {"text": "Manufactured by Example Foods Limited", "confidence": 0.90, "box": [[0, 0], [300, 0], [300, 20], [0, 20]]},
+            {"text": "Plot 12", "confidence": 0.90, "box": [[0, 30], [100, 30], [100, 50], [0, 50]]},
+            {"text": "Industrial Area", "confidence": 0.90, "box": [[0, 55], [150, 55], [150, 75], [0, 75]]},
+            {"text": "Sector 5", "confidence": 0.90, "box": [[0, 80], [100, 80], [100, 100], [0, 100]]},
+            {"text": "Model Number", "confidence": 0.80, "box": [[0, 125], [150, 125], [150, 145], [0, 145]]},
+        ],
+    })
+
+    assert result["manufacturerAddress"] == "Plot 12 Industrial Area Sector 5"
+
+
+def test_same_row_model_value_is_excluded_with_split_boundary_label():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Marketed By Example Services Private Limited First Road Mocel Number 0$320 Couniyo Oriqin India",
+        "text_blocks": [
+            {"text": "Marketed By Example Services Private Limited", "confidence": 0.90, "box": [[0, 300], [300, 300], [300, 320], [0, 320]]},
+            {"text": "First Road", "confidence": 0.90, "box": [[0, 340], [120, 340], [120, 360], [0, 360]]},
+            {"text": "Mocel", "confidence": 0.80, "box": [[53, 393], [91, 393], [91, 409], [53, 409]]},
+            {"text": "Number", "confidence": 0.80, "box": [[95, 393], [149, 393], [149, 407], [95, 407]]},
+            {"text": "0$320", "confidence": 0.90, "box": [[275, 391], [319, 391], [319, 407], [275, 407]]},
+            {"text": "Couniyo Oriqin", "confidence": 0.70, "box": [[53, 430], [150, 430], [150, 446], [53, 446]]},
+            {"text": "India", "confidence": 0.95, "box": [[160, 430], [220, 430], [220, 446], [160, 446]]},
+        ],
+    })
+
+    assert result["manufacturerAddress"] == "First Road"
+    assert "0$320" not in result["manufacturerAddress"]
+
+
+def test_isolated_skewed_address_block_is_excluded_but_horizontal_blocks_remain():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Manufactured by Example Foods Limited Crysta Downs EGL Business Park Village Model Number ZX9",
+        "text_blocks": [
+            {"text": "Manufactured by Example Foods Limited", "confidence": 0.90, "box": [[0, 300], [300, 300], [300, 320], [0, 320]]},
+            {"text": "Crysta", "confidence": 0.90, "box": [[0, 340], [70, 340], [70, 360], [0, 360]]},
+            {"text": "Downs", "confidence": 0.90, "box": [[75, 340], [140, 340], [140, 360], [75, 360]]},
+            {"text": "EGL Business Park", "confidence": 0.90, "box": [[0, 365], [180, 365], [180, 385], [0, 385]]},
+            {"text": "Village", "confidence": 0.90, "box": [[411, 357], [458, 364], [455, 380], [408, 374]]},
+            {"text": "Model Number", "confidence": 0.80, "box": [[0, 410], [150, 410], [150, 430], [0, 430]]},
+        ],
+    })
+
+    assert result["manufacturerAddress"] == "Crysta Downs EGL Business Park"
+    assert "Village" not in result["manufacturerAddress"]
+
+
+def test_low_confidence_unlabelled_product_candidate_is_null():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Iet lleght 200g",
+        "text_blocks": [
+            {"text": "Iet lleght", "confidence": 0.136, "box": [[0, 0], [100, 0], [100, 20], [0, 20]]},
+            {"text": "200g", "confidence": 0.87, "box": [[0, 30], [70, 30], [70, 50], [0, 50]]},
+        ],
+    })
+
+    assert result["productName"] is None
+    assert result["netQuantity"] == "200g"
+
+
+def test_fragmented_product_of_row_uses_constrained_country_validation():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "PRODUCT OF INDM",
+        "text_blocks": [
+            {"text": "PRODUCT", "confidence": 0.43, "box": [[0, 0], [80, 0], [80, 20], [0, 20]]},
+            {"text": "OF INDM", "confidence": 0.78, "box": [[85, 1], [160, 1], [160, 21], [85, 21]]},
+        ],
+    })
+
+    assert result["countryOfOrigin"] == "India"
+
+
+def test_mildly_skewed_address_row_remains_supported():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Manufactured by Example Foods Limited Plot 12 Industrial Area Model Number ZX9",
+        "text_blocks": [
+            {"text": "Manufactured by Example Foods Limited", "confidence": 0.90, "box": [[0, 0], [300, 0], [300, 20], [0, 20]]},
+            {"text": "Plot 12", "confidence": 0.90, "box": [[0, 30], [100, 32], [100, 52], [0, 50]]},
+            {"text": "Industrial Area", "confidence": 0.90, "box": [[0, 55], [150, 57], [150, 77], [0, 75]]},
+            {"text": "Model Number", "confidence": 0.90, "box": [[0, 100], [150, 100], [150, 120], [0, 120]]},
+        ],
+    })
+
+    assert result["manufacturerAddress"] == "Plot 12 Industrial Area"
+
+
+def test_unlabelled_consumer_metadata_is_not_product_name():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Comolainis Feedback Conlact 200g",
+        "text_blocks": [
+            {"text": "Comolainis Feedback   Conlact", "confidence": 0.358, "box": [[0, 0], [240, 0], [240, 25], [0, 25]]},
+            {"text": "200g", "confidence": 0.87, "box": [[0, 35], [70, 35], [70, 55], [0, 55]]},
+        ],
+    })
+
+    assert result["productName"] is None
+    assert result["netQuantity"] == "200g"
+
+
+def test_explicit_generic_value_beats_metadata_fallback_at_low_confidence():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Common Genenc Name D Select Wireless Mouse DSJ20 Feedback Conlact",
+        "text_blocks": [
+            {"text": "Common Genenc Name", "confidence": 0.72, "box": [[0, 0], [180, 0], [180, 20], [0, 20]]},
+            {"text": "D Select Wireless Mouse DSJ20", "confidence": 0.19, "box": [[0, 25], [240, 25], [240, 45], [0, 45]]},
+            {"text": "Feedback Conlact", "confidence": 0.90, "box": [[0, 60], [150, 60], [150, 80], [0, 80]]},
+        ],
+    })
+
+    assert result["productName"] == "D Select Wireless Mouse DSJ20"
+
+
+def test_realistic_skewed_product_of_pair_is_reconstructed():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "PRODUCT OF INDM unrelated text",
+        "text_blocks": [
+            {"text": "PRODUCT", "confidence": 0.428, "box": [[233, 465], [279, 472], [277, 485], [231, 479]]},
+            {"text": "OF INDM", "confidence": 0.776, "box": [[277, 473], [321, 473], [321, 487], [277, 487]]},
+            {"text": "PRODUCT", "confidence": 0.90, "box": [[0, 0], [80, 0], [80, 20], [0, 20]]},
+            {"text": "OF GERMANY", "confidence": 0.90, "box": [[400, 100], [500, 100], [500, 120], [400, 120]]},
+        ],
+    })
+
+    assert result["countryOfOrigin"] == "India"
+
+
+def test_unrelated_rotated_product_does_not_join_distant_origin_text():
+    result = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "PRODUCT OF GERMANY",
+        "text_blocks": [
+            {"text": "PRODUCT", "confidence": 0.90, "box": [[20, 20], [25, 80], [45, 78], [40, 18]]},
+            {"text": "OF GERMANY", "confidence": 0.90, "box": [[300, 200], [400, 200], [400, 220], [300, 220]]},
+        ],
+    })
+
+    assert result["countryOfOrigin"] is None
+
+
+def test_promotional_heading_and_pricing_rejected_as_product_name():
+    """Tests that questions, promotional taglines, price headers, and instructions are rejected as productName."""
+    # Case 1: Interrogative question heading
+    res1 = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "What makes it so special? Net Wt 250ml MRP Rs 150.00 Mfg by Aura Ltd 05/2025",
+        "text_blocks": [
+            {"text": "What makes it so special?", "confidence": 0.95, "box": [[0, 0], [200, 0], [200, 20], [0, 20]]},
+            {"text": "Net Wt 250ml", "confidence": 0.90, "box": [[0, 30], [100, 30], [100, 50], [0, 50]]},
+            {"text": "MRP Rs 150.00", "confidence": 0.90, "box": [[0, 60], [100, 60], [100, 80], [0, 80]]},
+            {"text": "Mfg by Aura Ltd", "confidence": 0.90, "box": [[0, 90], [100, 90], [100, 110], [0, 110]]},
+            {"text": "05/2025", "confidence": 0.90, "box": [[0, 120], [100, 120], [100, 140], [0, 140]]},
+        ]
+    })
+    assert res1["productName"] is None
+
+    # Case 2: Pricing header
+    res2 = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Sale Price Net Wt 200g Product of India",
+        "text_blocks": [
+            {"text": "Sale Price", "confidence": 0.95, "box": [[0, 0], [100, 0], [100, 20], [0, 20]]},
+            {"text": "Net Wt 200g", "confidence": 0.90, "box": [[0, 30], [100, 30], [100, 50], [0, 50]]},
+            {"text": "Product of India", "confidence": 0.90, "box": [[0, 60], [120, 60], [120, 80], [0, 80]]},
+        ]
+    })
+    assert res2["productName"] is None
+
+    # Case 3: Usage instruction
+    res3 = extract_fields({
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Directions for use: Apply gently Net Wt 100g",
+        "text_blocks": [
+            {"text": "Directions for use: Apply gently", "confidence": 0.92, "box": [[0, 0], [200, 0], [200, 20], [0, 20]]},
+            {"text": "Net Wt 100g", "confidence": 0.90, "box": [[0, 30], [100, 30], [100, 50], [0, 50]]},
+        ]
+    })
+    assert res3["productName"] is None
+
+
+def test_explicit_manufacturer_beats_tm_owner_and_marketer():
+    """Tests that explicit manufacturer declarations outrank TM owners and marketers."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": (
+            "Manufactured by Apex Pharma Private Limited Sector 12 Industrial Area\n"
+            "Marketed by Apex Brands Limited Park Street Kolkata\n"
+            "TM OWNERS ALPHA CREATORS LLP"
+        ),
+        "text_blocks": [
+            {"text": "Manufactured by Apex Pharma Private Limited", "confidence": 0.92, "box": [[0, 0], [250, 0], [250, 20], [0, 20]]},
+            {"text": "Sector 12 Industrial Area", "confidence": 0.90, "box": [[0, 25], [150, 25], [150, 45], [0, 45]]},
+            {"text": "Marketed by Apex Brands Limited", "confidence": 0.90, "box": [[0, 50], [200, 50], [200, 70], [0, 70]]},
+            {"text": "Park Street Kolkata", "confidence": 0.90, "box": [[0, 75], [120, 75], [120, 95], [0, 95]]},
+            {"text": "TM OWNERS ALPHA CREATORS LLP", "confidence": 0.90, "box": [[0, 100], [200, 100], [200, 120], [0, 120]]},
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert fields["manufacturerName"] == "Apex Pharma Private Limited"
+    assert "Sector 12 Industrial Area" in fields["manufacturerAddress"]
+    assert "ALPHA CREATORS" not in (fields["manufacturerName"] or "")
+
+
+def test_expiry_and_batch_dates_never_assigned_to_packing_date():
+    """Tests that expiry dates and batch codes are strictly rejected from monthOfPacking/yearOfPacking."""
+    # Only expiry / batch date present -> must return None, None
+    expiry_only = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Batch No: BR2E1728 Expiry Date 06/2029 Best Before 24 Months Net Wt 250ml",
+        "text_blocks": [
+            {"text": "Batch No: BR2E1728 06/29", "confidence": 0.90, "box": [[0, 0], [150, 0], [150, 20], [0, 20]]},
+            {"text": "Expiry Date 06/2029", "confidence": 0.90, "box": [[0, 25], [120, 25], [120, 45], [0, 45]]},
+            {"text": "Best Before 24 Months", "confidence": 0.90, "box": [[0, 50], [140, 50], [140, 70], [0, 70]]},
+            {"text": "Net Wt 250ml", "confidence": 0.90, "box": [[0, 75], [100, 75], [100, 95], [0, 95]]},
+        ]
+    }
+    res_exp = extract_fields(expiry_only)
+    assert res_exp["monthOfPacking"] is None
+    assert res_exp["yearOfPacking"] is None
+
+    # Explicit Mfg Date present -> correctly extracted
+    mfg_present = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Mfg Date: 08/2024 Use by 08/2026 Batch 4492",
+        "text_blocks": [
+            {"text": "Mfg Date: 08/2024", "confidence": 0.92, "box": [[0, 0], [120, 0], [120, 20], [0, 20]]},
+            {"text": "Use by 08/2026", "confidence": 0.90, "box": [[0, 25], [100, 25], [100, 45], [0, 45]]},
+            {"text": "Batch 4492", "confidence": 0.90, "box": [[0, 50], [80, 50], [80, 70], [0, 70]]},
+        ]
+    }
+    res_mfg = extract_fields(mfg_present)
+    assert res_mfg["monthOfPacking"] == "08"
+    assert res_mfg["yearOfPacking"] == "2024"
+
+
+def test_regulatory_license_numbers_not_extracted_as_consumer_phone():
+    """Tests that FSSAI/Lic numbers are never extracted as consumerCare phone numbers."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "fssat LicNo.072299901593 For customer care contact 1800-425-4026 email: care@example.com",
+        "text_blocks": [
+            {"text": "fssat LicNo.072299901593", "confidence": 0.90, "box": [[0, 0], [180, 0], [180, 20], [0, 20]]},
+            {"text": "For customer care contact 1800-425-4026", "confidence": 0.90, "box": [[0, 25], [250, 25], [250, 45], [0, 45]]},
+            {"text": "email: care@example.com", "confidence": 0.90, "box": [[0, 50], [150, 50], [150, 70], [0, 70]]},
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert "072299901593" not in fields["consumerCare"]
+    assert "1800-425-4026" in fields["consumerCare"]
+    assert "care@example.com" in fields["consumerCare"]
+
+
+def test_fused_manufacturer_declaration_parsing():
+    """Tests that fused label text like 'Mfd.for/Regd.officeCOMPANY' is parsed cleanly."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Md.foiRegd.office DHARAMPAL SATYAPAL FOODS LIMITED Plot 4 Sector 63 Noida",
+        "text_blocks": [
+            {"text": "Md.foiRegd.office DHARAMPAL SATYAPAL FOODS LIMITED", "confidence": 0.85, "box": [[0, 0], [350, 0], [350, 20], [0, 20]]},
+            {"text": "Plot 4 Sector 63 Noida", "confidence": 0.85, "box": [[0, 25], [150, 25], [150, 45], [0, 45]]},
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert fields["manufacturerName"] == "DHARAMPAL SATYAPAL FOODS LIMITED"
+    assert "Sector 63 Noida" in fields["manufacturerAddress"]
+
+
+def test_manufacturer_address_stops_at_fssai_and_instructions():
+    """Tests that address collection terminates at FSSAI licenses, batch instructions, or other sections."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": (
+            "Manufactured by Nutra Solutions Pvt Ltd Plot 15 Phase 2 Industrial Area\n"
+            "fssat LicNo.072299901593\n"
+            "FOR MANUFACTURING UNIT ADDRESS READ FIRST CHARACTER\n"
+            "Storage instructions: Store in cool dry place"
+        ),
+        "text_blocks": [
+            {"text": "Manufactured by Nutra Solutions Pvt Ltd", "confidence": 0.90, "box": [[0, 0], [250, 0], [250, 20], [0, 20]]},
+            {"text": "Plot 15 Phase 2 Industrial Area", "confidence": 0.90, "box": [[0, 25], [200, 25], [200, 45], [0, 45]]},
+            {"text": "fssat LicNo.072299901593", "confidence": 0.88, "box": [[0, 50], [160, 50], [160, 70], [0, 70]]},
+            {"text": "FOR MANUFACTURING UNIT ADDRESS READ FIRST CHARACTER", "confidence": 0.85, "box": [[0, 75], [300, 75], [300, 95], [0, 95]]},
+            {"text": "Storage instructions: Store in cool dry place", "confidence": 0.90, "box": [[0, 100], [250, 100], [250, 120], [0, 120]]},
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert fields["manufacturerName"] == "Nutra Solutions Pvt Ltd"
+    assert fields["manufacturerAddress"] == "Plot 15 Phase 2 Industrial Area"
+    assert "LicNo" not in fields["manufacturerAddress"]
+    assert "MANUFACTURING UNIT" not in fields["manufacturerAddress"]
+    assert "Storage" not in fields["manufacturerAddress"]
+
+
+def test_glued_price_date_stamp_extraction():
+    """Tests extraction of price from stamped text where price and date are concatenated."""
+    ocr_result = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "MRP Rs. 175.0007/25 (Incl. of all taxes) Net Qty 250ml",
+        "text_blocks": [
+            {"text": "MRP Rs. 175.0007/25 (Incl. of all taxes)", "confidence": 0.90, "box": [[0, 0], [250, 0], [250, 20], [0, 20]]},
+            {"text": "Net Qty 250ml", "confidence": 0.90, "box": [[0, 25], [100, 25], [100, 45], [0, 45]]},
+        ]
+    }
+    fields = extract_fields(ocr_result)
+    assert fields["mrp"] == "MRP Rs. 175.00 (inclusive of all taxes)"
+    assert fields["netQuantity"] == "250ml"
+
+
+def test_extraction_confidence_penalizes_incomplete_or_ambiguous_fields():
+    """Tests that missing core statutory fields downgrade confidence from HIGH to MEDIUM."""
+    # Label with missing packing date
+    ocr_missing_date = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Shower Gel Net Qty 250ml MRP Rs. 175.00 Mfg by Aura Ltd Sector 5",
+        "text_blocks": [
+            {"text": "Shower Gel", "confidence": 0.90, "box": [[0, 0], [100, 0], [100, 20], [0, 20]]},
+            {"text": "Net Qty 250ml", "confidence": 0.90, "box": [[0, 30], [100, 30], [100, 50], [0, 50]]},
+            {"text": "MRP Rs. 175.00", "confidence": 0.90, "box": [[0, 60], [100, 60], [100, 80], [0, 80]]},
+            {"text": "Mfg by Aura Ltd", "confidence": 0.90, "box": [[0, 90], [100, 90], [100, 110], [0, 110]]},
+            {"text": "Sector 5", "confidence": 0.90, "box": [[0, 120], [100, 120], [100, 140], [0, 140]]},
+        ]
+    }
+    fields = extract_fields(ocr_missing_date)
+    assert fields["monthOfPacking"] is None
+    assert fields["extraction_confidence"] == "MEDIUM"
 
 

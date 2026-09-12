@@ -56,13 +56,14 @@ CANONICAL_LABELS = {
     ),
     "MANUFACTURER": (
         "manufactured by", "manufactured for", "manufactured in", "mfd by", "mfd for",
-        "mfg by", "mfg for", "made by", "produced by", "manufacturer", "mfg unit", "factory address"
+        "mfg by", "mfg for", "mfg/pack", "mfg / pack", "mfg/pkd", "mfg & pack",
+        "made by", "produced by", "manufacturer", "mfg unit", "factory address"
     ),
     "MARKETED_BY": (
         "marketed by", "marketed for", "marketed in", "mkd by", "marketer"
     ),
     "PACKER": (
-        "packed by", "pkd by", "packer"
+        "packed by", "packed for", "packed in", "packed", "pkd by", "packer"
     ),
     "IMPORTER": (
         "imported by", "imported in", "importer"
@@ -217,7 +218,8 @@ def _normalize_mrp(raw_mrp: str, context: str = "") -> str:
     has_rupee_symbol = '₹' in combined_context
     prefix = "MRP ₹" if has_rupee_symbol else "MRP Rs."
 
-    has_tax = bool(re.search(r'(?i)\b(?:nclusive|inclusive|incl|tax|taxes)\b', combined_context))
+    cleaned_context = re.sub(r'[()]', ' ', combined_context)
+    has_tax = bool(re.search(r'(?i)(?:\b|(?<=\d))(?:nclusive|inclusive|incl|tax|taxes)\b', cleaned_context))
 
     if has_tax:
         return f"{prefix} {price_val} (inclusive of all taxes)"
@@ -469,7 +471,8 @@ FIELD_LABEL_PATTERN = re.compile(
     r'common\s+(?:genaric|generic|genenc)\s+name|generic\s+name|commodity\s+name|name\s+of\s+commodity|'
     r'number\s+of\s+units?|month\s+(?:and|&)?\s*year|maximum\s+retail\s+price|max\.?\s*retail\s*price|mrp|'
     r'telephone|phone|email(?:\s+address)?|registered\s+address|regd\.?\s*office|'
-    r'marketed\s+by|manufactured\s+by|mfg\s+by|mfd\s+by|packed\s+by|pkd\s+by|imported\s+by|'
+    r'marketed\s+by|manufactured\s+by|mfg[./\s]*(?:by|for|pack|packed|pkd)?|mfd[./\s]*(?:by|for|pack|packed|pkd)?|'
+    r'packed[.\s]*(?:by)?|pkd[.\s]*(?:by)?|imported\s+by|manufacturer|packer|'
     r'net\s+(?:quantity|weight|vol|volume|content|contents|qty|wt)|'
     r'for\s+batch(?:\s+no\.?)?|batch(?:\s+number|\s+no\.?)?|lot(?:\s+no\.?)?|'
     r'storage\s+instructions?|directions\s+for\s+use|allergen\s+advice|ingredients|best\s+before|expiry\s+date|'
@@ -507,7 +510,7 @@ def _extract_mrp(text_blocks, full_text):
     glued_price_pattern = re.compile(r'(?<!\d)(\d{2,}\.\d{2})(?=\d{2}/\d{2,4})')
     value_pattern = re.compile(
         r'\s*[:\.-]?\s*(?:Rs\.?|₹|INR)?\s*\d+(?:[\.,]\d{1,2}|\s+\d{2})?'
-        r'(?:\s*\(?\s*(?:incl|inclusive|nclusive)[^()\n\r]{0,35}(?:taxes?|tax)?\s*\)?)?',
+        r'(?:\s*[\(\)]?\s*(?:incl|inclusive|nclusive)[^\n\r]{0,35}?(?:taxes?|tax)?\s*[\(\)]?)?',
         re.IGNORECASE
     )
 
@@ -641,7 +644,8 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
     - Customer care and regulatory license sections
     """
     mfg_pattern = re.compile(
-        r'(?:Manufactured\s+(?:by|for|in)|Mfg[.\s]*(?:by|for)|Mfd[.\s]*(?:by|for)|Packed[.\s]*by|Pkd[.\s]*by|Marketed[.\s]*by|Mkd[.\s]*by|Manufacturer\s*[:\.-]|Packer\s*[:\.-])\s*[:\.-]?\s*(.+)',
+        r'(?:Manufactured\s+(?:by|for|in)?|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
+        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)?|Mkd\s+by|Manufacturer|Packer)\s*[:./-]?\s*(.+)',
         re.IGNORECASE
     )
     addr_pattern = re.compile(
@@ -663,7 +667,7 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
             return False
         if re.match(r'(?i)^(?:e[- ]?mail|telephone|phone|contact|customer\s+care|consumer\s+complaints|website)\b', normalized):
             return False
-        if re.search(r'(?i)\b(?:use|see|incl|price|batch|mfd|mrp|product|before|belore)\b', normalized):
+        if re.search(r'(?i)\b(?:use|see|incl|price|batch|mfd|mrp|product|before|belore|net\s*qty|net\s*wt)\b', normalized):
             return False
         if re.match(r'(?i)^(?:registered|regd|factory|plant|mfg|manufacturing)?\s*address\b', normalized):
             return False
@@ -671,7 +675,7 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
 
     def role_score(header_text):
         h = header_text.lower()
-        if any(mfg_term in h for mfg_term in ["manufactured by", "mfg by", "mfd by", "mfg. by", "mfd. by", "made in", "made by", "produced by", "manufacturer", "factory address", "manufacturing unit"]):
+        if any(mfg_term in h for mfg_term in ["manufactured by", "mfg by", "mfd by", "mfg. by", "mfd. by", "mfg/pack", "mfg / pack", "mfg/pkd", "mfg & pack", "made in", "made by", "produced by", "manufacturer", "factory address", "manufacturing unit"]):
             return 4
         if any(mkt_term in h for mkt_term in ["marketed by", "marketed for", "mkd by", "marketer", "packed by", "pkd by", "imported by", "packer"]):
             return 3
@@ -688,7 +692,8 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
 
     section_pattern = re.compile(
         r'(?i)(?:Registered\s+Address|Regd\.?\s*(?:Address|Office)|Factory\s+Address|'
-        r'Manufactured\s+(?:by|for|in)|Mfg[.\s]*(?:by|for)|Mfd[.\s]*(?:by|for)|Packed[.\s]*by|Pkd[.\s]*by|Marketed[.\s]*by|Mkd[.\s]*by|'
+        r'Manufactured\s+(?:by|for|in)?|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
+        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)?|Mkd\s+by|'
         r'Made\s+in\s+[A-Za-z\s]+by|Manufacturer|Packer)\s*[:./-]?'
     )
     ordered_blocks = _reading_order(text_blocks)
@@ -708,7 +713,12 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
 
         inline_value = text[section_match.end():].strip()
         # Clean inline prefix leftovers like '/Regd.office' or ': '
-        inline_value = re.sub(r'^(?:[/:.-]|\b(?:regd|mfd|mfg)[.\s]*(?:office|address|by|for)[/:.-]?\s*)+', '', inline_value, flags=re.IGNORECASE).strip()
+        inline_value = re.sub(
+            r'^(?:[/:.-]|\b(?:regd|mfd|mfg|pack|pkd)[./\s]*(?:office|address|by|for|pack|packed|pkd)[/:.-]?\s*)+',
+            '',
+            inline_value,
+            flags=re.IGNORECASE
+        ).strip()
 
         section_blocks = []
         previous_block = block
@@ -1398,7 +1408,7 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
     entity_start_pos = None
     for pos, (_, block) in enumerate(ordered):
         txt = block.get("text", "").strip()
-        if re.search(r'(?i)\b(?:manufactured\s+by|mfg\s+by|mfd\s+by|marketed\s+by|packed\s+by|imported\s+by)\b', txt):
+        if re.search(r'(?i)\b(?:manufactured\s+by|mfg[./\s]*(?:by|for|pack|packed|pkd)|mfd[./\s]*(?:by|for|pack|packed|pkd)|marketed\s+by|packed\s+by|imported\s+by|manufacturer|packer)\b', txt):
             entity_start_pos = pos
             break
 

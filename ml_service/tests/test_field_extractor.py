@@ -974,3 +974,67 @@ def test_extraction_confidence_penalizes_incomplete_or_ambiguous_fields():
     assert fields["extraction_confidence"] == "MEDIUM"
 
 
+def test_bug1_mrp_lowercase_inclusive_and_unmatched_parenthesis():
+    """
+    Tests Bug 1 fixes:
+    - Working case: 'Maximum Retail Price 899.00Inclusive of all Taxes'
+    - Failing case: 'MRP 95.00inclusive of all taxes)' (lowercase inclusive & stray unmatched closing paren)
+    """
+    # Dell mouse working case
+    dell_ocr = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Maximum Retail Price 899.00Inclusive of all Taxes",
+        "text_blocks": [
+            {"text": "Maximum Retail Price 899.00Inclusive of all Taxes", "confidence": 0.92, "box": [[0, 0], [300, 0], [300, 20], [0, 20]]}
+        ]
+    }
+    dell_fields = extract_fields(dell_ocr)
+    assert dell_fields["mrp"] == "MRP Rs. 899.00 (inclusive of all taxes)"
+
+    # Chana label failing case
+    chana_ocr = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "MRP 95.00inclusive of all taxes)",
+        "text_blocks": [
+            {"text": "MRP 95.00inclusive of all taxes)", "confidence": 0.90, "box": [[0, 0], [300, 0], [300, 20], [0, 20]]}
+        ]
+    }
+    chana_fields = extract_fields(chana_ocr)
+    assert chana_fields["mrp"] == "MRP Rs. 95.00 (inclusive of all taxes)"
+
+
+def test_bug2_mfg_pack_prefix_recognition():
+    """
+    Tests Bug 2 fixes:
+    - Working case: 'Marketed By:Dell International Services India Private Limited Crysta! Downs,EGL Business Park...'
+    - Failing case: 'Mfg/Pack: Sunrise Agro Foods Pvt. Ltd Plot No.45,MIDC Industrial Area Nashik, Maharashtra - 422010'
+    """
+    # Dell mouse working case
+    dell_ocr = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Marketed By:Dell International Services India Private Limited Crysta! Downs,EGL Business Park",
+        "text_blocks": [
+            {"text": "Marketed By:Dell International Services India Private Limited Crysta! Downs,EGL Business Park", "confidence": 0.95, "box": [[0, 0], [500, 0], [500, 20], [0, 20]]}
+        ]
+    }
+    dell_fields = extract_fields(dell_ocr)
+    assert dell_fields["manufacturerName"] == "Dell International Services India Private Limited"
+    assert dell_fields["manufacturerAddress"] is not None
+    assert "Crysta! Downs" in dell_fields["manufacturerAddress"] or "EGL Business Park" in dell_fields["manufacturerAddress"]
+
+    # Chana label failing case
+    chana_ocr = {
+        "quality": {"quality_status": "ACCEPTABLE"},
+        "full_text": "Mfg/Pack: Sunrise Agro Foods Pvt. Ltd Plot No.45,MIDC Industrial Area Nashik, Maharashtra - 422010",
+        "text_blocks": [
+            {"text": "Mfg/Pack: Sunrise Agro Foods Pvt. Ltd Plot No.45,MIDC Industrial Area Nashik, Maharashtra - 422010", "confidence": 0.92, "box": [[0, 0], [500, 0], [500, 20], [0, 20]]}
+        ]
+    }
+    chana_fields = extract_fields(chana_ocr)
+    assert chana_fields["manufacturerName"] == "Sunrise Agro Foods Pvt. Ltd"
+    assert chana_fields["manufacturerAddress"] is not None
+    assert "Plot No.45" in chana_fields["manufacturerAddress"]
+    assert "Nashik" in chana_fields["manufacturerAddress"] or "Maharashtra" in chana_fields["manufacturerAddress"]
+
+
+

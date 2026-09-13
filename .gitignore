@@ -20,6 +20,7 @@ __pycache__/
 # Antigravity agent workspace rules/metadata
 .agents/
 
-# Processed images directory
+# Processed & Annotated images directories
 processed_images/
+annotated_images/
 

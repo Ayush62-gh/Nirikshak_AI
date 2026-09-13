@@ -100,10 +100,13 @@ def test_ocr_output_is_json_serializable(
                 )
             ]
 
+    class FakeEasyOCR:
+        Reader = lambda *args, **kwargs: FakeReader()
+
     monkeypatch.setattr(
-        ocr.easyocr,
-        "Reader",
-        lambda *args, **kwargs: FakeReader()
+        ocr,
+        "easyocr",
+        FakeEasyOCR
     )
 
     annotation_folder = tmp_path / "annotated"
@@ -147,10 +150,13 @@ def test_no_text_detected(tmp_path, monkeypatch):
         def readtext(self, image, detail, paragraph):
             return []
 
+    class FakeEasyOCREmpty:
+        Reader = lambda *args, **kwargs: EmptyReader()
+
     monkeypatch.setattr(
-        ocr.easyocr,
-        "Reader",
-        lambda *args, **kwargs: EmptyReader()
+        ocr,
+        "easyocr",
+        FakeEasyOCREmpty
     )
 
     result = ocr.extract_text(
@@ -225,7 +231,8 @@ def test_final_required_output_format(monkeypatch):
         "full_text",
         "text_blocks",
         "processed_image_path",
-        "annotated_image_path"
+        "annotated_image_path",
+        "retried_preprocessed"
     }
 
     json.dumps(result)

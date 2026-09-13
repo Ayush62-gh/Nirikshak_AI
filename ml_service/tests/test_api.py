@@ -66,6 +66,7 @@ def test_extract_endpoint_valid_image(tmp_path, monkeypatch):
             "text_blocks",
             "processed_image_path",
             "annotated_image_path",
+            "retried_preprocessed",
             "fields"
         }
         assert set(data.keys()) == expected_keys

@@ -7,6 +7,10 @@ from app.rules.mfg_name_rule import ManufacturerNameRule
 from app.rules.mfg_address_rule import ManufacturerAddressRule
 from app.rules.date_of_packing_rule import DateOfPackingRule
 from app.rules.consumer_care_rule import ConsumerCareRule
+from app.rules.country_of_origin_rule import CountryOfOriginRule
+from app.rules.unit_sale_price_rule import UnitSalePriceRule
+from app.rules.expiry_date_rule import ExpiryDateRule
+from app.rules.font_height_rule import FontHeightRule
 
 __all__ = [
     "RuleRegistry",
@@ -18,6 +22,11 @@ __all__ = [
     "ManufacturerAddressRule",
     "DateOfPackingRule",
     "ConsumerCareRule",
+    "CountryOfOriginRule",
+    "UnitSalePriceRule",
+    "ExpiryDateRule",
+    "FontHeightRule",
 ]
+
 
 

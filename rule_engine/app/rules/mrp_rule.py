@@ -66,8 +66,11 @@ class MRPDeclarationRule(AbstractRule):
                 message="MRP declaration does not contain a valid numeric price value."
             )
 
-        has_currency = "rs" in mrp_text or "₹" in product.mrp or "inr" in mrp_text or "mrp" in mrp_text
-        tax_clauses = ("incl. of all taxes", "inclusive of all taxes", "incl of all taxes", "incl. taxes", "inclusive of taxes")
+        has_currency = "rs" in mrp_text or "₹" in product.mrp or "inr" in mrp_text or "mrp" in mrp_text or "रु" in product.mrp or "रू" in product.mrp or "मूल्य" in mrp_text
+        tax_clauses = (
+            "incl. of all taxes", "inclusive of all taxes", "incl of all taxes", "incl. taxes", "inclusive of taxes",
+            "सब कर सहित", "सभी करों सहित", "कर सहित", "कर सहित मूल्य"
+        )
         has_tax_clause = any(clause in mrp_text for clause in tax_clauses)
 
         # Step 3: Clear PASS when structured data contains price, currency indicator, AND tax inclusion phrase

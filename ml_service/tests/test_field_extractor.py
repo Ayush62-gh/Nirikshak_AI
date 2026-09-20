@@ -1038,3 +1038,24 @@ def test_bug2_mfg_pack_prefix_recognition():
 
 
 
+
+
+def test_manufacturer_prefix_stripping():
+    from field_extractor import _extract_manufacturer
+    
+    variations = [
+        'Manufacturer: ABC Industries Pvt. Ltd.',
+        'Manufacturer : ABC Industries Pvt. Ltd.',
+        'Manufacturer:ABC Industries Pvt. Ltd.',
+        'Manufactured By: ABC Industries Pvt. Ltd.',
+        'Manufactured by : ABC Industries Pvt. Ltd.',
+        'Mfg By: ABC Industries Pvt. Ltd.',
+        'Mfg. By : ABC Industries Pvt. Ltd.'
+    ]
+    
+    for text in variations:
+        blocks = [{'text': text}]
+        name, address = _extract_manufacturer(blocks, text)
+        assert name == 'ABC Industries Pvt. Ltd.', f'Failed for {text}, got {name}'
+
+

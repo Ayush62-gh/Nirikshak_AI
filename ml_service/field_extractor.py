@@ -644,8 +644,9 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
     - Customer care and regulatory license sections
     """
     mfg_pattern = re.compile(
-        r'(?:Manufactured\s+(?:by|for|in)?|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
-        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)?|Mkd\s+by|Manufacturer|Packer)\s*[:./-]?\s*(.+)',
+        r'(?:(?:Manufacturer|Packer|Manufactured|Marketed)\s*[:./-]+|'
+        r'(?:Manufactured\s+(?:by|for|in)|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
+        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)|Mkd\s+by|Manufacturer\s+Name)\s*[:./-]?)\s*(.+)',
         re.IGNORECASE
     )
     addr_pattern = re.compile(
@@ -692,9 +693,10 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
 
     section_pattern = re.compile(
         r'(?i)(?:Registered\s+Address|Regd\.?\s*(?:Address|Office)|Factory\s+Address|'
-        r'Manufactured\s+(?:by|for|in)?|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
-        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)?|Mkd\s+by|'
-        r'Made\s+in\s+[A-Za-z\s]+by|Manufacturer|Packer)\s*[:./-]?'
+        r'(?:Manufacturer|Packer|Manufactured|Marketed)\s*[:./-]+|'
+        r'(?:Manufactured\s+(?:by|for|in)|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
+        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)|Mkd\s+by|'
+        r'Made\s+in\s+[A-Za-z\s]+by|Manufacturer\s+Name)\s*[:./-]?)'
     )
     ordered_blocks = _reading_order(text_blocks)
     semantic_boundary_indices = _semantic_boundary_indices(ordered_blocks)

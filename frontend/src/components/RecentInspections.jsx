@@ -91,7 +91,7 @@ function RecentInspections({ scans = [], loading = false, error = null }) {
               <div
                 key={scan.scan_id || index}
                 onClick={() => navigate("/history")}
-                className="grid grid-cols-[48px_minmax(50px,1fr)_auto_65px_82px_18px] items-center gap-3 border-b border-[#EEF2F6] py-3 last:border-b-0 cursor-pointer hover:bg-slate-50/50 transition-colors"
+                className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-2 border-b border-[#EEF2F6] py-3 last:border-b-0 cursor-pointer hover:bg-slate-50/50 transition-colors md:grid-cols-[48px_minmax(50px,1fr)_auto_65px_82px_18px] md:gap-3"
               >
                 {/* Product Image Placeholder */}
                 <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-[#F8FAFC] text-[#64748B]">
@@ -117,14 +117,17 @@ function RecentInspections({ scans = [], loading = false, error = null }) {
                 </span>
 
                 {/* Score */}
-                <span
+                {/* <span
                   className={`text-right text-sm font-bold ${config.scoreClass}`}
+                > */}
+                <span
+                  className={`hidden text-right text-sm font-bold md:block ${config.scoreClass}`}
                 >
                   {config.scoreText}
                 </span>
 
                 {/* Date */}
-                <span className="text-right text-[10px] whitespace-nowrap text-[#64748B]">
+                <span className="hidden text-right text-[10px] whitespace-nowrap text-[#64748B] md:block">
                   {dateStr}
                 </span>
 

@@ -56,7 +56,7 @@ function Dashboard() {
   const reviewPct = total > 0 ? ((reviewCount / scans.length) * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
 
       {/* Error Alert */}
       {error && (
@@ -79,7 +79,7 @@ function Dashboard() {
       )}
 
       {/* Statistics */}
-      <div className="grid grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 md:gap-5">
 
         <StatCard
           type="total"

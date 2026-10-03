@@ -100,10 +100,13 @@ def test_ocr_output_is_json_serializable(
                 )
             ]
 
+    class FakeEasyOCR:
+        Reader = lambda *args, **kwargs: FakeReader()
+
     monkeypatch.setattr(
-        ocr.easyocr,
-        "Reader",
-        lambda *args, **kwargs: FakeReader()
+        ocr,
+        "easyocr",
+        FakeEasyOCR
     )
 
     annotation_folder = tmp_path / "annotated"
@@ -147,10 +150,13 @@ def test_no_text_detected(tmp_path, monkeypatch):
         def readtext(self, image, detail, paragraph):
             return []
 
+    class FakeEasyOCREmpty:
+        Reader = lambda *args, **kwargs: EmptyReader()
+
     monkeypatch.setattr(
-        ocr.easyocr,
-        "Reader",
-        lambda *args, **kwargs: EmptyReader()
+        ocr,
+        "easyocr",
+        FakeEasyOCREmpty
     )
 
     result = ocr.extract_text(
@@ -190,12 +196,13 @@ def test_final_required_output_format(monkeypatch):
         }
     )
 
+    import paddle_ocr as _paddle_ocr
     monkeypatch.setattr(
-        image_processor,
+        _paddle_ocr,
         "extract_text",
         lambda image_path,
-        create_annotation,
-        annotation_folder: {
+        create_annotation=True,
+        annotation_folder="annotated_images": {
             "success": True,
             "full_text": "MRP Rs 120",
             "text_blocks": [
@@ -224,7 +231,8 @@ def test_final_required_output_format(monkeypatch):
         "full_text",
         "text_blocks",
         "processed_image_path",
-        "annotated_image_path"
+        "annotated_image_path",
+        "retried_preprocessed"
     }
 
     json.dumps(result)
@@ -233,7 +241,7 @@ def test_final_required_output_format(monkeypatch):
 def test_multiple_image_support(monkeypatch):
     """Multiple images ke counts aur combined text check karta hai."""
 
-    def fake_process_product_image(image_path):
+    def fake_process_product_image(image_path, ocr_engine="paddle"):
         return {
             "quality": {
                 "blur_score": 150.0,

@@ -2,35 +2,36 @@ import os
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List
 
-import easyocr
 from fastapi import FastAPI, File, HTTPException, UploadFile
 import uvicorn
 
 import image_processor
-import ocr
+import paddle_ocr
 from field_extractor import extract_fields
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-
-_reader_singleton = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     FastAPI lifespan handler:
-    Loads EasyOCR.Reader as a singleton at service startup.
-    This avoids repeated model-loading overhead on every request.
+    Loads the configured OCR reader singleton (PaddleOCR by default, or EasyOCR
+    if OCR_ENGINE=easyocr) at service startup to avoid repeated model-loading overhead.
     """
-    global _reader_singleton
-    print("Loading EasyOCR.Reader singleton at startup...", flush=True)
-    _reader_singleton = easyocr.Reader(["en", "hi"], gpu=False, verbose=False)
-
-    # Patch easyocr.Reader in easyocr and ocr modules to return the singleton
-    easyocr.Reader = lambda *args, **kwargs: _reader_singleton
-    ocr.easyocr.Reader = lambda *args, **kwargs: _reader_singleton
-
+    engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
+    if engine in ("easyocr", "easy_ocr", "easy"):
+        import easyocr
+        import ocr
+        print("Loading EasyOCR.Reader singleton at startup...", flush=True)
+        _reader = easyocr.Reader(["en", "hi"], gpu=False, verbose=False)
+        easyocr.Reader = lambda *args, **kwargs: _reader
+        ocr.easyocr.Reader = lambda *args, **kwargs: _reader
+    else:
+        print("Loading PaddleOCR PP-OCRv3 reader singleton at startup...", flush=True)
+        paddle_ocr.get_paddle_reader()
     yield
 
 
@@ -73,7 +74,6 @@ def extract_text_from_image(file: UploadFile = File(...)):
             detail="Uploaded file is empty."
         )
 
-    # Temporary file creation
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_ext)
     try:
         temp_file.write(contents)
@@ -106,6 +106,74 @@ def extract_text_from_image(file: UploadFile = File(...)):
                 os.unlink(temp_file.name)
             except OSError:
                 pass
+
+
+@app.post("/extract-multi")
+def extract_text_from_multiple_images(files: List[UploadFile] = File(...)):
+    """
+    Processes multiple uploaded product images (e.g., front, back, side labels)
+    and returns merged Metrology fields with consensus & conflict resolution.
+    
+    Accepts: multipart/form-data with repeated field named 'files'
+    """
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail="No files provided."
+        )
+
+    temp_paths = []
+    try:
+        for file in files:
+            filename = file.filename or ""
+            file_ext = Path(filename).suffix.lower()
+            if file_ext not in SUPPORTED_EXTENSIONS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Invalid image format in file '{filename}': '{file_ext}'. "
+                        f"Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+                    )
+                )
+
+            contents = file.file.read()
+            if not contents:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Uploaded file '{filename}' is empty."
+                )
+
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_ext)
+            temp_file.write(contents)
+            temp_file.close()
+            temp_paths.append(temp_file.name)
+
+        result = image_processor.process_product_images(temp_paths)
+
+        if isinstance(result, dict) and result.get("success") is False:
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message", "Multi-image processing failed.")
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Multi-image processing failed: {str(error)}"
+        )
+
+    finally:
+        for p in temp_paths:
+            if os.path.exists(p):
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
 
 
 if __name__ == "__main__":

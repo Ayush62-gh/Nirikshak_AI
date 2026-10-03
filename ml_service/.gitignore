@@ -18,8 +18,6 @@ processed_images/
 annotated_images/
 
 # Downloaded OCR/ML models
-.EasyOCR/
-easyocr_models/
 models/
 *.pt
 *.pth

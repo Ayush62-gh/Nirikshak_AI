@@ -18,20 +18,10 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 async def lifespan(app: FastAPI):
     """
     FastAPI lifespan handler:
-    Loads the configured OCR reader singleton (PaddleOCR by default, or EasyOCR
-    if OCR_ENGINE=easyocr) at service startup to avoid repeated model-loading overhead.
+    Loads the configured OCR reader singleton (PaddleOCR) at service startup to avoid repeated model-loading overhead.
     """
-    engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
-    if engine in ("easyocr", "easy_ocr", "easy"):
-        import easyocr
-        import ocr
-        print("Loading EasyOCR.Reader singleton at startup...", flush=True)
-        _reader = easyocr.Reader(["en", "hi"], gpu=False, verbose=False)
-        easyocr.Reader = lambda *args, **kwargs: _reader
-        ocr.easyocr.Reader = lambda *args, **kwargs: _reader
-    else:
-        print("Loading PaddleOCR PP-OCRv3 reader singleton at startup...", flush=True)
-        paddle_ocr.get_paddle_reader()
+    print("Loading PaddleOCR PP-OCRv3 reader singleton at startup...", flush=True)
+    paddle_ocr.get_paddle_reader()
     yield
 
 

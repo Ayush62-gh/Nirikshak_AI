@@ -1,7 +1,7 @@
 # NIRIKSHAK AI — OCR and Image Processing Module
 
 This module processes packaged-product label images and extracts English
-and Hindi text using EasyOCR.
+text using PaddleOCR.
 
 It is a part of NIRIKSHAK AI, a system intended to identify possible
 packaged-commodity label compliance issues.
@@ -22,7 +22,7 @@ text-box coordinates. A separate rule engine uses this output.
 - Reduces image noise
 - Improves local contrast using CLAHE
 - Attempts small-angle tilt correction
-- Extracts English and Hindi text using EasyOCR
+- Extracts English text using PaddleOCR (PP-OCRv3)
 - Returns confidence scores and bounding-box coordinates
 - Saves processed images
 - Generates annotated images with detected text boxes
@@ -34,10 +34,9 @@ text-box coordinates. A separate rule engine uses this output.
 
 - Python 3.10 or 3.11
 - OpenCV
-- EasyOCR
+- PaddleOCR
 - Pillow
 - NumPy
-- PyTorch
 - Pytest
 
 ## Folder Structure
@@ -54,7 +53,7 @@ ml_service/
 ├── api.py                 FastAPI HTTP wrapper server
 ├── field_extractor.py     Structured field parsing layer
 ├── image_processor.py     Complete integration pipeline
-├── ocr.py                 OCR and annotation functions
+├── paddle_ocr.py          OCR and annotation functions
 ├── preprocess.py          Image preprocessing functions
 ├── quality_checker.py     Blur and brightness checking
 ├── requirements.txt
@@ -105,11 +104,7 @@ Upgrade pip:
 python -m pip install --upgrade pip
 ```
 
-For a CPU-only Windows setup, PyTorch can be installed first with:
 
-```powershell
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-```
 
 Install the remaining requirements:
 
@@ -131,7 +126,7 @@ Or run directly via python (reads optional `PORT` environment variable, defaulti
 python api.py
 ```
 
-> **Note on Performance:** The service pre-loads the `EasyOCR.Reader` model as a singleton at server startup via FastAPI's `lifespan` handler. This eliminates the repeated model-loading overhead on individual `/extract` requests.
+> **Note on Performance:** The service pre-loads the `PaddleOCR` model as a singleton at server startup via FastAPI's `lifespan` handler. This eliminates the repeated model-loading overhead on individual `/extract` requests.
 
 ### Endpoints
 
@@ -335,7 +330,7 @@ python .\preprocess.py ".\input_images\catch_label.jpg"
 OCR and annotation:
 
 ```powershell
-python .\ocr.py ".\processed_images\catch_label_processed.jpg"
+python .\paddle_ocr.py ".\processed_images\catch_label_processed.jpg"
 ```
 
 Complete integration:
@@ -349,7 +344,7 @@ python .\image_processor.py ".\input_images\catch_label.jpg"
 Run tests from the `ml_service` folder:
 
 ```powershell
-python -m pytest .\tests\test_ocr.py -v
+python -m pytest .\tests -v
 ```
 
 The tests cover:
@@ -432,7 +427,6 @@ Results may be affected by:
 - Curved product containers
 - Reflections and glare
 - Decorative fonts
-- Mixed Hindi and English text
 - Folded or partially hidden labels
 - Complex image backgrounds
 - Incorrect camera angle

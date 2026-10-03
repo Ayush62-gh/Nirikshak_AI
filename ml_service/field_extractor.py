@@ -66,7 +66,8 @@ CANONICAL_LABELS = {
         "packed by", "packed for", "packed in", "packed", "pkd by", "packer"
     ),
     "IMPORTER": (
-        "imported by", "imported in", "importer"
+        "imported by", "imported in", "importer", "importer name", "import & marketed by",
+        "imp by", "imported for"
     ),
     "REGISTERED_ADDRESS": (
         "registered address", "regd office", "regd address", "factory address",
@@ -496,11 +497,33 @@ def _is_field_label(text):
     return False
 
 
+# Regex matching net-quantity / net-content / net-vol context phrases.
+# Values extracted near these phrases must NEVER be treated as MRP.
+_NET_QTY_CONTEXT_RE = re.compile(
+    r'(?i)\b(?:net\s*(?:qty|quantity|wt|weight|vol|volume|content|contents)|nett\s*(?:qty|quantity|wt|weight)|net\s+content)\b'
+)
+
+
+def _is_net_qty_context(text: str) -> bool:
+    """Returns True if the text is primarily a net-quantity/net-content block, not an MRP block."""
+    if _NET_QTY_CONTEXT_RE.search(text):
+        return True
+    # A bare unit-of-measure value with no price prefix is a qty candidate, not a price
+    if re.fullmatch(
+        r'(?i)\s*\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|gram|grams|ltr|liter|litres|liters|pcs|units|n)\s*',
+        text.strip()
+    ):
+        return True
+    return False
+
+
 def _extract_mrp(text_blocks, full_text):
     """
     Extract MRP only when a retail-price label supports the numeric value.
     Handles glued stamp formats where price and date are concatenated (e.g. '175.0007/25')
     only when supported by explicit MRP context.
+
+    SAFETY: A value that is a net-quantity/net-content candidate must never be returned as MRP.
     """
     label_pattern = re.compile(
         r'(?:MRP|M\.?\s*R\.?\s*P\.?|Max(?:imum)?\s*Ret(?:ail)?\s*P[a-z]{0,4}e?|Ret(?:ail)?\s*P[a-z]{0,4}e?)',
@@ -530,6 +553,9 @@ def _extract_mrp(text_blocks, full_text):
                 nearby = text_blocks[nearby_index]
                 nearby_text = nearby.get("text", "")
                 if re.search(r'(?i)\b(?:phone|tel|date|batch|licen[cs]e|ean|upc)\b|\d{3,}[-\s]\d{3,}', nearby_text):
+                    continue
+                # SAFETY: Never pick a nearby block that is itself a net-quantity context.
+                if _is_net_qty_context(nearby_text):
                     continue
                 price_match = price_pattern.search(nearby_text)
                 if price_match and nearby.get("confidence", 0) >= 0.35:
@@ -578,8 +604,16 @@ def _extract_net_quantity(text_blocks, full_text):
                 if nearby_count:
                     return nearby_count
         if re.search(r'(?i)\b(?:Net\s*(?:Qty|Quantity|Wt|Weight|Vol|Volume|Content|Contents)|Nett\s*(?:Qty|Quantity|Wt|Weight))\b', txt):
+            # First: try to find the quantity directly within this block
+            direct_qty = qty_pattern.search(txt)
+            if direct_qty:
+                return direct_qty.group(1).strip()
+            # Fallback: look at adjacent blocks (skip unit-price blocks)
+            _usp_skip_re = re.compile(r'(?i)\b(?:unit\s+sale\s+price|unit\s+price|sale\s+price\s+per)\b')
             for nearby_index in _nearby_blocks(text_blocks, block_index):
                 nearby_text = text_blocks[nearby_index].get("text", "")
+                if _usp_skip_re.search(nearby_text):
+                    continue
                 nearby_promotional = re.search(
                     r'(?i)\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|gram|grams|ltr|liter|litres|liters)\s*(?:\+|plus).*?[=:]\s*'
                     r'(\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|gram|grams|ltr|liter|litres|liters))', nearby_text
@@ -612,11 +646,15 @@ def _extract_net_quantity(text_blocks, full_text):
     if match:
         return match.group(1).strip()
 
-    # Fallback to generic quantity search
+    # Fallback to generic quantity search — exclude blocks that contain a unit-price label.
+    _usp_label_exclusion_re = re.compile(
+        r'(?i)\b(?:unit\s+sale\s+price|unit\s+price|sale\s+price\s+per\s+unit|price\s+per)\b'
+    )
     for block in text_blocks:
         txt = block.get("text", "").strip()
         match = generic_qty_pattern.search(txt)
-        if match and not any(kw in txt.lower() for kw in ["mrp", "rs", "₹", "date", "batch", "lot"]):
+        if match and not any(kw in txt.lower() for kw in ["mrp", "rs", "₹", "date", "batch", "lot"]) \
+                and not _usp_label_exclusion_re.search(txt):
             return match.group(1).strip()
 
     match = generic_qty_pattern.search(full_text)
@@ -628,6 +666,37 @@ def _extract_net_quantity(text_blocks, full_text):
 
 ALLERGEN_KEYWORDS = ("facility", "may process", "allergen", "equipment", "may contain", "processed in")
 TM_KEYWORDS = ("tm owners", "tm owner", "trademark owner", "trademark owners", "brand owner")
+
+
+_STATUTORY_TARGET_WORDS = {
+    "manufactured": 4,
+    "manufacturer": 4,
+    "marketed": 3,
+    "marketer": 3,
+    "packed": 3,
+    "packer": 3,
+    "registered": 2,
+}
+
+_CORRUPTED_STATUTORY_LABEL_RE = re.compile(
+    r'(?i)\b([a-z]{4,15})\s*(?:by|bv|bi|for|[:.-])',
+    re.IGNORECASE
+)
+
+
+def _match_corrupted_statutory_label(text):
+    text_clean = text.strip()
+    for match in _CORRUPTED_STATUTORY_LABEL_RE.finditer(text_clean):
+        candidate_word = match.group(1).lower()
+        for target, score in _STATUTORY_TARGET_WORDS.items():
+            if SequenceMatcher(None, candidate_word, target).ratio() >= 0.70:
+                end_pos = match.end()
+                rest = text_clean[end_pos:]
+                by_m = re.match(r'^\s*(?:by|bv|bi|for)?\s*[:.-]?', rest, re.IGNORECASE)
+                if by_m:
+                    end_pos += by_m.end()
+                return score, end_pos, target
+    return None
 
 
 def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
@@ -646,7 +715,7 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
     mfg_pattern = re.compile(
         r'(?:(?:Manufacturer|Packer|Manufactured|Marketed)\s*[:./-]+|'
         r'(?:Manufactured\s+(?:by|for|in)|Mfg[./\s]*(?:by|for|pack|packed|pkd)|Mfd[./\s]*(?:by|for|pack|packed|pkd)|'
-        r'Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)|Mkd\s+by|Manufacturer\s+Name)\s*[:./-]?)\s*(.+)',
+        r'Made\s+(?:in\s+[A-Za-z]+\s+)?by|Packed\s+by|Pkd\s+by|Marketed\s+(?:by|for)|Mkd\s+by|Manufacturer\s+Name)\s*[:./-]?)\s*(.+)',
         re.IGNORECASE
     )
     addr_pattern = re.compile(
@@ -707,13 +776,20 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
         if any(tm_kw in text.lower() for tm_kw in TM_KEYWORDS):
             continue
         section_match = section_pattern.search(text)
-        if not section_match or any(kw in text.lower() for kw in ALLERGEN_KEYWORDS):
+        corrupted_match = None
+        if not section_match:
+            corrupted_match = _match_corrupted_statutory_label(text)
+        if (not section_match and not corrupted_match) or any(kw in text.lower() for kw in ALLERGEN_KEYWORDS):
             continue
 
-        matched_header = text[:section_match.end()]
-        score = role_score(matched_header)
-
-        inline_value = text[section_match.end():].strip()
+        if section_match:
+            matched_header = text[:section_match.end()]
+            score = role_score(matched_header)
+            inline_value = text[section_match.end():].strip()
+        else:
+            score, end_pos, _ = corrupted_match
+            matched_header = text[:end_pos]
+            inline_value = text[end_pos:].strip()
         # Clean inline prefix leftovers like '/Regd.office' or ': '
         inline_value = re.sub(
             r'^(?:[/:.-]|\b(?:regd|mfd|mfg|pack|pkd)[./\s]*(?:office|address|by|for|pack|packed|pkd)[/:.-]?\s*)+',
@@ -785,6 +861,8 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
                     break
 
         if candidate_name:
+            if corrupted_match and not (COMPANY_SUFFIX_PATTERN.search(candidate_name) and is_company_candidate(candidate_name)):
+                continue
             candidate_name = re.sub(r'^[^\w\s]+', '', candidate_name).strip()
             candidate_name = re.sub(r'^\d+\s+(?=[A-Za-z])', '', candidate_name).strip()
             name_position = next(
@@ -915,31 +993,93 @@ def _extract_manufacturer(text_blocks, full_text, raw_blocks=None):
                                 address = next_line
                 break
 
+    # Company-suffix-only unlabelled scan: only used when a nearby block carries a
+    # recognisable manufacturer/packer label anchor.  This prevents an arbitrary
+    # company-like word (e.g. 'VITAMINC') from being elevated to manufacturerName
+    # merely because it contains a suffix like 'Industries' or 'Solutions'.
+    _mfg_anchor_re = re.compile(
+        r'(?i)\b(?:manufactured?\s+by|mfg[./\s]*(?:by|for|pack|packed|pkd)|mfd[./\s]*(?:by|for)|'
+        r'packed\s+by|pkd\s+by|marketed\s+by|mkd\s+by|manufacturer|packer|'
+        r'regd[./\s]*(?:office|ofce|offce)|ofce\b|'
+        r'registered\s+address|factory\s+address|manufacturing\s+unit|'
+        r'in\s+[A-Za-z]{3,20}\s+by)\b'
+    )
+
+    def _has_statutory_anchor(anchor_text):
+        if not anchor_text:
+            return False
+        if _mfg_anchor_re.search(anchor_text):
+            return True
+        return _match_corrupted_statutory_label(anchor_text) is not None
+
     if not name:
         for index, block in enumerate(text_blocks):
             text = block.get("text", "").strip()
             if not text or any(kw in text.lower() for kw in ALLERGEN_KEYWORDS) or any(tm in text.lower() for tm in TM_KEYWORDS):
                 continue
-            if not COMPANY_SUFFIX_PATTERN.search(text) or not is_company_candidate(text):
+            comp_match = COMPANY_SUFFIX_PATTERN.search(text)
+            if not comp_match or not is_company_candidate(text):
                 continue
-            parts = [text]
-            for nearby_index in _nearby_blocks(text_blocks, index):
-                nearby_text = text_blocks[nearby_index].get("text", "").strip()
-                if nearby_text and not any(kw in nearby_text.lower() for kw in ALLERGEN_KEYWORDS) and not any(tm in nearby_text.lower() for tm in TM_KEYWORDS):
-                    parts.insert(0, nearby_text)
-                    combined = " ".join(parts)
-                    company_match = COMPANY_SUFFIX_PATTERN.search(combined)
-                    if company_match and is_company_candidate(combined):
-                        name = company_match.group(1).strip()
+            # Require that either this block or a nearby block has a manufacturer-label anchor.
+            has_anchor = bool(_has_statutory_anchor(text))
+            if not has_anchor:
+                for nearby_index in _nearby_blocks(text_blocks, index, max_vertical_gap=60):
+                    nearby_txt = text_blocks[nearby_index].get("text", "").strip()
+                    if _has_statutory_anchor(nearby_txt):
+                        has_anchor = True
                         break
+            if not has_anchor:
+                continue
+
+            words = re.findall(r'[A-Za-z]+', comp_match.group(1).strip())
+            if len(words) >= 2 and is_company_candidate(comp_match.group(1)):
+                name = comp_match.group(1).strip()
+                rem = comp_match.group(2).strip()
+                if rem and _is_address_text(rem):
+                    address = rem
+            else:
+                parts = [text]
+                for nearby_index in _nearby_blocks(text_blocks, index):
+                    nearby_text = text_blocks[nearby_index].get("text", "").strip()
+                    if nearby_text and not any(kw in nearby_text.lower() for kw in ALLERGEN_KEYWORDS) and not any(tm in nearby_text.lower() for tm in TM_KEYWORDS):
+                        parts.insert(0, nearby_text)
+                        combined = " ".join(parts)
+                        company_match = COMPANY_SUFFIX_PATTERN.search(combined)
+                        if company_match and is_company_candidate(combined):
+                            name = company_match.group(1).strip()
+                            break
             if name:
+                if not address:
+                    pos = next((i for i, (orig_i, _) in enumerate(ordered_blocks) if orig_i == index), -1)
+                    if pos >= 0:
+                        addr_parts = []
+                        prev_b = ordered_blocks[pos][1]
+                        for _, follow_b in ordered_blocks[pos + 1:]:
+                            f_txt = follow_b.get("text", "").strip()
+                            if any(tm in f_txt.lower() for tm in TM_KEYWORDS) or _looks_like_section_boundary(f_txt):
+                                break
+                            if _is_plausible_address_block(prev_b, follow_b):
+                                if not _has_statutory_anchor(f_txt):
+                                    addr_parts.append(f_txt)
+                                prev_b = follow_b
+                        while addr_parts and re.search(r'(?i)\b(?:fssai|fssat|lic|licence|license|art\.?\s*\d+)\b', addr_parts[-1].strip()):
+                            addr_parts.pop()
+                        if addr_parts:
+                            address = " ".join(addr_parts)
                 break
 
-    # Fallback to raw blocks (confidence < 0.10) if name is still missing
+    # Fallback to raw blocks (confidence < 0.10) if name is still missing.
+    # Requires either a mfg-label anchor in the block itself, or that the block
+    # was already matched via the section_pattern scan above (section_results non-empty
+    # means we already found labelled context; this path is purely for
+    # sub-threshold-confidence blocks that carry an explicit label).
     if not name and raw_blocks:
         for b in raw_blocks:
             txt = b.get("text", "").strip()
             if not txt or any(kw in txt.lower() for kw in ALLERGEN_KEYWORDS) or any(tm in txt.lower() for tm in TM_KEYWORDS):
+                continue
+            # Raw-block fallback ONLY when an explicit mfg/packer label is present in the block.
+            if not _has_statutory_anchor(txt):
                 continue
             comp_match = COMPANY_SUFFIX_PATTERN.search(txt)
             if comp_match and is_company_candidate(txt) and len(re.findall(r'[A-Za-z]+', txt)) >= 2:
@@ -959,16 +1099,23 @@ def _extract_dates(text_blocks, full_text):
     """
     month_pattern = r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:us|ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
 
-    # Explicit manufacturing/packing date pattern
+    # Explicit manufacturing/packing date pattern.
+    # NOTE: The anchor keywords MUST be genuinely manufacturing/packing context.
+    # Fused OCR artefacts like 'MFD.NOUSEBEFORE' must NOT match — the pattern
+    # requires a positive manufacturing keyword followed (possibly via separator) by
+    # date digits. The negative lookbehind in the anchor ensures 'USEBEFORE' or
+    # 'USE BEFORE' fused to a manufacturing prefix is treated as expiry context.
     date_pattern = re.compile(
         r'(?:(?:Month\s*(?:and|&)?\s*Year\s*of|Date\s*of|Month/Year\s*of)\s*)?'
-        r'(?:Manu[a-z]+|Manuf[a-z]*|Mfg(?:\s+Date)?|Mfd(?:\s+Date)?|Pack[a-z]*|Pkd|DOM|DOP|Packing|Manufacture)\s*[:\.-]?\s*'
+        r'(?:Manu[a-z]+|Manuf[a-z]*|Mfg(?:\s+Date)?|Mfd(?:\s+Date)?|Pack[a-z]*|Pkd|DOM|DOP|Packing|Manufacture)'
+        r'(?!\s*\.?\s*(?:no|use\s*before|usebefore|exp|expiry|best\s*before))'
+        r'\s*[:\.-]?\s*'
         rf'(?:([0-3]?\d)[/\.\-\s]+)?({month_pattern}|[0-1]?\d)[/\.\-\s]+(20\d{{2}}|\d{{2}}(?!\d))',
         re.IGNORECASE
     )
 
     expiry_or_batch_re = re.compile(
-        r'(?i)\b(?:exp|expiry|best\s+before|use\s+by|use\s+before|batch|lot|b\.?\s*no)\b'
+        r'(?i)\b(?:exp|expiry|best\s+before|use\s+by|use\s+before|usebefore|batch|lot|b\.?\s*no)\b'
     )
 
     # 1. Search in blocks with explicit manufacturing/packing labels
@@ -1065,12 +1212,25 @@ def _extract_dates(text_blocks, full_text):
     return None, None
 
 
+# Consumer-care label context — used to validate that a website belongs to the
+# consumer-care section rather than being an arbitrary URL on the label.
+_CONSUMER_CARE_LABEL_RE = re.compile(
+    r'(?i)\b(?:consumer\s*care|customer\s*care|care\s*cell|customer\s*complaints?|'
+    r'consumer\s*complaints?|contact\s*us|feedback|telephone|phone|tel|helpline|'
+    r'toll\s*free|email|e[- ]?mail|website|web\s*site|visit\s*us)\b'
+)
+
+
 def _extract_consumer_care(text_blocks, full_text):
     """
     Extracts structured consumer care contact details (phone, email, website).
+    - Phone/email are extracted from blocks associated with consumer-care labels.
+    - Website is only extracted when accompanied by a consumer-care context label.
     Excludes regulatory license numbers (FSSAI, Lic No, EAN, barcode, pin codes).
     """
-    tollfree_pattern = re.compile(r'\b1800[-\s]?\d{3,4}[-\s]?\d{3,4}\b')
+    # Toll-free numbers: 1800 followed by groups of 2-4 digits separated by hyphens/spaces.
+    # Handles formats: 1800-10-22-221, 1800-102-5353, 1800 3099 807, etc.
+    tollfree_pattern = re.compile(r'\b1800(?:[-\s]?\d{2,4}){2,4}\b')
     mobile_pattern = re.compile(r'\b(?:\+?91[-\s]?)?[6-9]\d{9}\b')
     landline_pattern = re.compile(r'\b(?:0\d{2,4}|\+?91[-\s]?\d{2,4})[-\s]\d{6,8}\b|\b\d{3,5}[-\s]\d{6,8}\b')
     email_pattern = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
@@ -1092,14 +1252,21 @@ def _extract_consumer_care(text_blocks, full_text):
 
     blocks_text = [b.get("text", "").strip() for b in text_blocks if b.get("text")]
     combined_text = " ".join(blocks_text) or full_text
-    combined_text = re.sub(r'\s+([@.])\s+', r'\1', combined_text)
+    combined_text = re.sub(r'\s+([.@])\s+', r'\1', combined_text)
     combined_text = re.sub(r'(?i)\s+at\s+', '@', combined_text)
     combined_text = re.sub(r'(?i)\b(?:ac|at)\s+(?=[a-z0-9._%+-]+\s*@)', '', combined_text)
     combined_text = re.sub(r'\s+@', '@', combined_text)
     combined_text = re.sub(r'(?<=@)([A-Za-z0-9._%+-]+)\s+(com|in|org|net)\b', r'\1.\2', combined_text, flags=re.IGNORECASE)
 
+    # Determine whether the combined text carries a consumer-care label (for website validation)
+    has_care_label = bool(_CONSUMER_CARE_LABEL_RE.search(combined_text))
+
     email_match = email_pattern.search(combined_text)
-    web_match = website_pattern.search(combined_text)
+
+    # Website: only extract when a care label is present in the combined text
+    web_match = None
+    if has_care_label:
+        web_match = website_pattern.search(combined_text)
 
     # Phone search with strict contextual filtering
     found_phone = None
@@ -1111,7 +1278,12 @@ def _extract_consumer_care(text_blocks, full_text):
         tf_match = tollfree_pattern.search(txt)
         if tf_match:
             found_phone = tf_match.group(0).strip()
-            break
+            # Verify it is not a regulatory / licence context
+            if not regulatory_prefix_re.search(txt[:tf_match.start()]):
+                break
+            else:
+                found_phone = None
+                continue
 
         # Check for phone preceded by telephone/phone/contact label
         care_label_match = re.search(r'(?i)\b(?:telephone|phone|tel|customer\s*care|consumer\s*care|care\s*cell|helpline|call)\b\s*[:.-]?\s*([+\d\s-]{7,15})', txt)
@@ -1161,6 +1333,7 @@ def _extract_consumer_care(text_blocks, full_text):
         return ", ".join(structured_parts)
 
     return None
+
 
 
 def _extract_country_of_origin(text_blocks, full_text):
@@ -1284,6 +1457,406 @@ def _extract_country_of_origin(text_blocks, full_text):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Rule 9 — Importer Name
+# ---------------------------------------------------------------------------
+
+_IMPORTER_LABEL_RE = re.compile(
+    r'(?i)(?:'
+    r'Importer(?:\s+Name)?|Imported\s+(?:by|for|in)|Imp(?:\.)?\s*[Bb]y|'
+    r'Import(?:er)?\s*&?\s*Marketed\s+[Bb]y'
+    r')\s*[:\.-]?\s*(.+)',
+)
+
+# Section-pattern recogniser for importer blocks (used for multi-block spans).
+_IMPORTER_SECTION_RE = re.compile(
+    r'(?i)(?:'
+    r'Importer(?:\s+Name)?|Imported\s+(?:by|for|in)|Imp(?:\.)?\s*[Bb]y|'
+    r'Import(?:er)?\s*&?\s*Marketed\s+[Bb]y'
+    r')\s*[:\.-]?'
+)
+
+# Words that disqualify a value from being an importer name.
+_IMPORTER_EXCLUSION_RE = re.compile(
+    r'(?i)\b(?:manufactured|mfg|mfd|packed|pkd|marketed|marketer|batch|lot|'
+    r'fssai|fssat|lic|licence|license|ean|upc|barcode|date|expiry|mrp|net\s*qty|net\s*wt|'
+    r'customer\s*care|consumer\s*care|telephone|phone|email|website)\b'
+)
+
+
+def _extract_importer(text_blocks, full_text):
+    """
+    Extracts importer name from blocks with explicit importer labels.
+
+    Recognises labels such as:
+        Importer: / Importer Name: / Imported By: / Imported by: /
+        IMP BY: / Import & Marketed By:
+
+    Safety rules:
+    - Explicit label required; no label → null.
+    - Do not confuse manufacturer, packer, or marketer as importer.
+    - Do not accept values that look like prices, dates, or batch codes.
+    - Do not hardcode any company name.
+    """
+
+    def is_valid_importer_value(val):
+        if not val:
+            return False
+        val = val.strip()
+        if len(val) < 2:
+            return False
+        if _IMPORTER_EXCLUSION_RE.search(val):
+            return False
+        if '@' in val or re.search(r'(?i)\b(?:https?://|www\.)\b', val):
+            return False
+        if re.match(r'^[^A-Za-z]+$', val):
+            return False
+        # Must have at least one alphabetic word of length ≥ 2
+        if not re.search(r'[A-Za-z]{2,}', val):
+            return False
+        return True
+
+    # Priority 1: inline label match within a single block
+    for block_index, block in enumerate(text_blocks):
+        txt = block.get("text", "").strip()
+        m = _IMPORTER_LABEL_RE.match(txt)
+        if m:
+            val = m.group(1).strip()
+            # Truncate at any strong boundary keyword
+            b_match = BOUNDARY_KEYWORDS_RE.search(val)
+            if b_match:
+                val = val[:b_match.start()].strip()
+            # Strip company suffix and take name only if it has a suffix
+            comp_m = COMPANY_SUFFIX_PATTERN.search(val)
+            candidate = comp_m.group(1).strip() if comp_m else val
+            if is_valid_importer_value(candidate):
+                return candidate
+            # Try following block
+            for nearby_index in _label_value_candidates(text_blocks, block_index, same_row_only=True):
+                nearby_text = text_blocks[nearby_index].get("text", "").strip()
+                b_m2 = BOUNDARY_KEYWORDS_RE.search(nearby_text)
+                if b_m2:
+                    nearby_text = nearby_text[:b_m2.start()].strip()
+                comp_m2 = COMPANY_SUFFIX_PATTERN.search(nearby_text)
+                cand2 = comp_m2.group(1).strip() if comp_m2 else nearby_text
+                if is_valid_importer_value(cand2):
+                    return cand2
+
+    # Priority 2: label at start of block, value on the next block(s)
+    ordered = _reading_order(text_blocks)
+    for pos, (block_index, block) in enumerate(ordered):
+        txt = block.get("text", "").strip()
+        if not _IMPORTER_SECTION_RE.match(txt):
+            continue
+        for _, following_block in ordered[pos + 1:pos + 4]:
+            following_text = following_block.get("text", "").strip()
+            if _looks_like_section_boundary(following_text):
+                break
+            b_m = BOUNDARY_KEYWORDS_RE.search(following_text)
+            if b_m:
+                following_text = following_text[:b_m.start()].strip()
+            comp_m = COMPANY_SUFFIX_PATTERN.search(following_text)
+            cand = comp_m.group(1).strip() if comp_m else following_text
+            if is_valid_importer_value(cand):
+                return cand
+            break  # Only examine the immediately-following block
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Rule 10 — Expiry Date
+# ---------------------------------------------------------------------------
+
+_EXPIRY_LABEL_RE = re.compile(
+    r'(?i)(?:'
+    r'Expir(?:y|ed)?(?:\s+Date)?|Exp(?:\.)?(?:\s+Date)?|'
+    r'Use\s+(?:Before|By)|Best\s+Before(?:\s+End)?|BBE|BB'
+    r')'
+    r'\s*[:\.-]?\s*'
+)
+
+_EXPIRY_DATE_RE = re.compile(
+    r'(?i)'
+    r'(?:(?:Expir(?:y|ed)?(?:\s+Date)?|Exp(?:\.)?(?:\s+Date)?|'
+    r'Use\s+(?:Before|By)|Best\s+Before(?:\s+End)?|BBE)\s*[:\.-]?\s*)'
+    r'(?:([0-3]?\d)[/\.\-\s]+)?'
+    r'((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+    r'jul(?:y)?|aug(?:us|ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|'
+    r'dec(?:ember)?)|[0-1]?\d)'
+    r'[/\.\-\s]+(20\d{2}|\d{2}(?!\d))'
+)
+
+# Negative lookbehind context: if the preceding text carries a manufacturing
+# keyword, we must not treat the date as expiry.
+_MFG_ONLY_CONTEXT_RE = re.compile(
+    r'(?i)\b(?:mfg|mfd|manufacture(?:d|r)?|packing|packed|pkd|dom|dop)\b'
+)
+
+
+def _extract_expiry_date(text_blocks, full_text):
+    """
+    Extracts expiry / use-before / best-before date.
+
+    Safety rules:
+    - Expiry context label is required (EXP, Expiry, Use Before, Best Before, BBE).
+    - Must not pick up manufacturing/packing dates.
+    - Must not interpret batch codes as expiry dates.
+    - Returns (month_str, year_str) or (None, None).
+    """
+    month_pattern = (
+        r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+        r'jul(?:y)?|aug(?:us|ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|'
+        r'dec(?:ember)?)'
+    )
+
+    batch_only_re = re.compile(
+        r'(?i)^\s*(?:batch|lot|b\.?\s*no)[^\d]*[A-Z0-9]+\s*$'
+    )
+
+    # Pattern: expiry label immediately followed by a date
+    expiry_inline_re = re.compile(
+        r'(?i)(?:'
+        r'Expir(?:y|ed)?(?:\s+Date)?|Exp(?:\.)?(?:\s+Date)?|'
+        r'Use\s+(?:Before|By)|Best\s+Before(?:\s+End)?|BBE|BB'
+        r')\s*[:\.-]?\s*'
+        rf'(?:([0-3]?\d)[/\.\-\s]+)?({month_pattern}|[0-1]?\d)[/\.\-\s]+(20\d{{2}}|\d{{2}}(?!\d))'
+    )
+
+    date_value_re = re.compile(
+        rf'\b(?:([0-3]?\d)[/\.\-\s]+)?({month_pattern}|[0-1]?\d)[/\.\-\s]+(20\d{{2}}|\d{{2}}(?!\d))\b',
+        re.IGNORECASE
+    )
+
+    expiry_context_re = re.compile(
+        r'(?i)\b(?:exp(?:ir(?:y|ed))?(?:\s+date)?|use\s+(?:before|by)|best\s+before(?:\s+end)?|bbe|bb)\b'
+    )
+
+    def parse_date_groups(groups):
+        """Parse matched (day, month, year) groups into (month_str, year_str)."""
+        m_raw = groups[1] if len(groups) > 1 else groups[0]
+        y_raw = groups[2] if len(groups) > 2 else groups[1]
+        m_str = str(m_raw).strip().lower()
+        if m_str in MONTH_MAP:
+            month = MONTH_MAP[m_str]
+        elif len(m_str) >= 3 and any(name.startswith(m_str) for name in MONTH_MAP):
+            month = MONTH_MAP[next(name for name in MONTH_MAP if name.startswith(m_str))]
+        elif m_str.isdigit():
+            month = f"{int(m_str):02d}"
+        else:
+            return None, None
+        y_str = str(y_raw).strip()
+        year = f"20{y_str}" if len(y_str) == 2 else y_str
+        return month, year
+
+    # Search each block for inline expiry pattern
+    for block_index, block in enumerate(text_blocks):
+        txt = block.get("text", "").strip()
+        if not txt or batch_only_re.match(txt):
+            continue
+        m = expiry_inline_re.search(txt)
+        if m:
+            # Ensure the prefix doesn't carry a manufacturing-only context
+            prefix = txt[:m.start()]
+            if _MFG_ONLY_CONTEXT_RE.search(prefix) and not expiry_context_re.search(prefix):
+                continue
+            month, year = parse_date_groups(m.groups())
+            if month and year:
+                return month, year
+
+        # Block has expiry label but no inline date → look at adjacent blocks
+        if expiry_context_re.search(txt):
+            # Make sure there's no manufacturing-only context in this block
+            if _MFG_ONLY_CONTEXT_RE.search(txt) and not expiry_context_re.search(txt):
+                continue
+            for nearby_index in _label_value_candidates(text_blocks, block_index, max_distance=150):
+                nearby_txt = text_blocks[nearby_index].get("text", "").strip()
+                if batch_only_re.match(nearby_txt):
+                    continue
+                if _MFG_ONLY_CONTEXT_RE.search(nearby_txt) and not expiry_context_re.search(nearby_txt):
+                    continue
+                dm = date_value_re.search(nearby_txt)
+                if dm:
+                    month, year = parse_date_groups(dm.groups())
+                    if month and year:
+                        return month, year
+
+    # Full-text fallback — only when an expiry label is clearly present
+    combined = " ".join(b.get("text", "") for b in text_blocks) or full_text
+    m = expiry_inline_re.search(combined)
+    if m:
+        prefix = combined[max(0, m.start() - 30):m.start()]
+        if not (_MFG_ONLY_CONTEXT_RE.search(prefix) and not expiry_context_re.search(prefix)):
+            month, year = parse_date_groups(m.groups())
+            if month and year:
+                return month, year
+
+    return None, None
+
+
+# ---------------------------------------------------------------------------
+# Rule 11 — Unit Sale Price
+# ---------------------------------------------------------------------------
+
+_UNIT_PRICE_LABEL_RE = re.compile(
+    r'(?i)(?:'
+    r'Unit\s+Sale\s+Price|Unit\s+Price|Sale\s+Price\s+per\s+Unit|'
+    r'Price\s+per\s+(?:unit|100\s*g|100\s*ml|kg|g\b|l\b|ml\b)|'
+    r'Rs\.?/?(?:100\s*g|100\s*ml|kg|g\b|l\b|ml\b)|'
+    r'₹/?(?:100\s*g|100\s*ml|kg|g\b|l\b|ml\b)'
+    r')\s*[:\.-]?\s*'
+)
+
+_UNIT_PRICE_VALUE_RE = re.compile(
+    r'(?i)(?:Rs\.?|₹|INR)?\s*(\d+(?:[\.,]\d{1,2})?)'
+    r'(?:\s*/\s*(?:100\s*g|100\s*ml|kg|g\b|l\b|ml\b|unit))?'
+)
+
+# Net-quantity units that must NEVER be treated as Unit Sale Price.
+_QTY_UNIT_ONLY_RE = re.compile(
+    r'(?i)^\s*\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms|gram|grams|ltr|liter|litres|liters|pcs|units?|n)\s*$'
+)
+
+
+def _extract_unit_sale_price(text_blocks, full_text):
+    """
+    Extracts Unit Sale Price when accompanied by an explicit unit-price label.
+
+    Recognised labels:
+        Unit Sale Price, Unit Price, Sale Price per Unit,
+        Rs./100g, Rs./100ml, Rs./kg, ₹/100g, ₹/100ml, Price per 100g, etc.
+
+    Safety rules:
+    - MRP must remain a separate field.
+    - Net Quantity values (250ml, 500g, 1kg …) must never become Unit Sale Price.
+    - A random numeric token is not accepted without a unit-price context label.
+    """
+
+    def is_valid_unit_price(val, context):
+        """Return True if the candidate looks like a genuine price (not a quantity)."""
+        if not val:
+            return False
+        if _QTY_UNIT_ONLY_RE.match(val):
+            return False
+        digits = re.sub(r'\D', '', val)
+        if not digits:
+            return False
+        # Sanity-check: price should have 1-6 digits
+        if len(digits) > 7:
+            return False
+        return True
+
+    def _normalize_unit_price(value_str, label_context=""):
+        """Normalise to a clean Rs./₹ price string.
+
+        Parameters
+        ----------
+        value_str : str
+            The numeric value portion only (e.g. '40.00', 'Rs. 100.00').
+        label_context : str
+            The full original text (label + value) for prefix and unit detection.
+        """
+        full_ctx = label_context or value_str
+        has_rupee = '\u20b9' in full_ctx
+        prefix = '\u20b9' if has_rupee else 'Rs.'
+        price_m = re.search(r'(\d+(?:[.,]\d{1,2})?)', value_str)
+        if not price_m:
+            return value_str.strip()
+        price_val = price_m.group(1).replace(',', '.')
+        if '.' not in price_val:
+            price_val = f"{price_val}.00"
+        # Extract the unit denominator from the label context (e.g. /100ml /kg)
+        unit_m = re.search(r'/\s*(100\s*g|100\s*ml|kg|g\b|l\b|ml\b|unit)', full_ctx, re.IGNORECASE)
+        unit_str = f"/{unit_m.group(1).strip()}" if unit_m else ""
+        return f"{prefix} {price_val}{unit_str}"
+
+    for block_index, block in enumerate(text_blocks):
+        txt = block.get("text", "").strip()
+        label_m = _UNIT_PRICE_LABEL_RE.search(txt)
+        if label_m:
+            after = txt[label_m.end():].strip()
+            # Reject if the remaining text looks like a pure quantity
+            if _QTY_UNIT_ONLY_RE.match(after):
+                continue
+            val_m = _UNIT_PRICE_VALUE_RE.match(after)
+            if val_m and val_m.group(1):
+                return _normalize_unit_price(after[:val_m.end()].strip(), label_context=txt)
+            # Look at same-row neighboring blocks
+            for nearby_index in _label_value_candidates(text_blocks, block_index, same_row_only=True):
+                nearby_text = text_blocks[nearby_index].get("text", "").strip()
+                if _QTY_UNIT_ONLY_RE.match(nearby_text):
+                    continue
+                nv_m = _UNIT_PRICE_VALUE_RE.match(nearby_text)
+                if nv_m and nv_m.group(1):
+                    return _normalize_unit_price(nearby_text[:nv_m.end()].strip(), label_context=txt)
+
+    # Full-text fallback
+    label_m = _UNIT_PRICE_LABEL_RE.search(full_text)
+    if label_m:
+        after = full_text[label_m.end():].strip()
+        if not _QTY_UNIT_ONLY_RE.match(after):
+            val_m = _UNIT_PRICE_VALUE_RE.match(after)
+            if val_m and val_m.group(1):
+                return _normalize_unit_price(after[:val_m.end()].strip(), label_context=full_text[label_m.start():])
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Rule 12 — Font Height (mm)
+# ---------------------------------------------------------------------------
+# PaddleOCR provides bounding-box pixel dimensions.  Converting pixels → mm
+# requires a known physical calibration reference (e.g., printed scale bar or
+# a known-dimension element on the label).  No such calibration mechanism
+# exists in this project; therefore we must never invent a mm value.
+#
+# The function below exposes the raw pixel bounding-box height for the tallest
+# text block so that a future calibrated implementation can use it.  The public
+# facing field is always None until calibration is available.
+# ---------------------------------------------------------------------------
+
+
+def _extract_font_height_mm(text_blocks, calibration_px_per_mm=None):
+    """
+    Returns physical font height in millimetres, or None if calibration is
+    unavailable.
+
+    Parameters
+    ----------
+    text_blocks : list of OCR block dicts (each with 'box' key)
+    calibration_px_per_mm : float or None
+        Pixels-per-millimetre conversion factor derived from a physical
+        calibration reference present on or with the image.
+        Pass None (default) when no calibration is available.
+
+    Returns
+    -------
+    float or None
+        Physical font height in mm, or None when calibration is unavailable.
+    """
+    if calibration_px_per_mm is None:
+        # No calibration → cannot compute physical dimensions.
+        # Expose the raw pixel height as metadata only (internal use).
+        pixel_heights = []
+        for block in text_blocks:
+            m = _box_metrics(block)
+            if m:
+                pixel_heights.append(m[3] - m[1])  # max_y − min_y
+        # Return None regardless; caller should not use pixel value as mm.
+        return None
+
+    # Calibrated path (for future use)
+    pixel_heights = []
+    for block in text_blocks:
+        m = _box_metrics(block)
+        if m:
+            pixel_heights.append(m[3] - m[1])
+    if not pixel_heights:
+        return None
+    max_pixel_height = max(pixel_heights)
+    return round(max_pixel_height / calibration_px_per_mm, 2)
+
+
 def _extract_product_name(text_blocks, full_text, known_extracted):
     """
     Extracts product name with strict conservative prioritization:
@@ -1307,7 +1880,7 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
     )
 
     promotional_verbs_re = re.compile(
-        r'(?i)\b(?:special|makes|delight|squeeze|rinse|massage|apply|lather|gently|feel|refreshing|experience|boost|enjoy|pure|goodness|secret|enriched|love|everyday\s*protein|cleanse|hydrat[a-z]*|protect[a-z]*)\b'
+        r'(?i)\b(?:special|makes|delight|squeeze|rinse|massage|apply|lather|gently|feel|refreshing|experience|boost|enjoy|pure|goodness|secret|enriched|love|everyday\s*protein|cleanse|hydrat[a-z]*|protect[a-z]*|formula\s+with|contains?|may\s+contain|made\s+(?:with|from|of)|(?:bottle|pack|container|tube|packaging)\s+made|recycled|excluding|over\s+time|appearance|the\s+product)\b'
     )
 
     price_terms_re = re.compile(
@@ -1315,7 +1888,48 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
     )
 
     instructional_or_legal_re = re.compile(
-        r'(?i)\b(?:directions?|how\s+to|storage|store\s+in|warning|caution|tamper|fssai|fssat|lic|licence|license|batch|lot|code|mfg|mfd|packed|pkd|expiry|exp|use\s+by|best\s+before|use\s+only|external\s+use|for\s+external|usage|ingredients?|nutrition|nutritional|allergen|consumer|customer|care|contact|feedback|telephone|phone|email|website|address|net\s+wt|net\s+qty|quantity|units?|commodity|model|origin|country)\b'
+        r'(?i)\b(?:directions?|how\s+to|storage|store\s+in|warning|caution|tamper|fssai|fssat|lic|licence|license|batch|lot|code|mfg|mfd|packed|pkd|expiry|exp|use\s+by|best\s+before|use\s+only|external\s+use|for\s+external|usage|ingredients?|nutrition|nutritional|allergen|consumer|customer|care|contact|feedback|telephone|phone|email|website|address|net\s+wt|net\s+qty|quantity|units?|commodity|model|origin|country|flush|avoid|occurs?|safety|first\s+aid|trademark|compatibility|dermatolog[a-z]*|clinical[a-z]*|tested|(?:see|refer|read)\s*(?:above|below|side|bottom|pkg|pack|panel))\b'
+    )
+
+    instructional_steps_re = re.compile(
+        r'(?i)(?:'
+        r'\b(?:\d+\s+)?steps?\s+(?:for|to|towards|in|of|ahead)\b'
+        r'|\b(?:follow|these|easy|simple)\s+(?:these\s+)?steps?\b'
+        r'|\bstep\s*[:.-]?\s*\d+\b'
+        r'|\bhow\s+to\s+(?:use|apply|wash|cleanse)\b'
+        r'|\broutine\s+steps?\b'
+        r'|\binstructions?\b'
+        r')'
+    )
+
+    dangling_prep_re = re.compile(
+        r'(?i)\b(?:for|withs?|ofs?|in|to|by|from|on|at|and|or|&)\s*(?:a|an|the)?\s*$'
+    )
+
+    leading_conj_re = re.compile(
+        r'(?i)^(?:and|or|&|with|of|in|for|by|from|to)\s+'
+    )
+
+    claims_or_attributes_re = re.compile(
+        r'(?i)(?:'
+        r'\bph\s*(?:skin|neutral|balanced?|level|\d+(?:\.\d+)?)\b'
+        r'|\b(?:skin|body|scalp)\s*ph\b'
+        r'|\b(?:paraben|soap|sulphate|sulfate|silicone|dye|microplastic|alcohol)[-\s]*free\b'
+        r'|\b(?:microplastic|protecting|nourishing|cleansing)[-\s]*formula\b'
+        r'|\bformula\s+with\b'
+        r'|\b(?:skin|hair|scalp)\s+compatibility\b'
+        r'|\bcompatibility\s+(?:tested|approved|dermatologically)\b'
+        r'|\b(?:dermatolog[a-z]*|clinical[a-z]*|paediatric[a-z]*|pediatric[a-z]*|ophthalmolog[a-z]*)\s+(?:tested|proven|approved|certified)\b'
+        r'|\bhypoallergenic\b'
+        r'|\b(?:gentle|mild|soft|safe)\s+on\s+(?:the\s+)?(?:skin|hair|scalp|hands|body)\b'
+        r'|\b(?:protects?|nourish(?:es)?|sooth(?:es)?|hydrates?|moisturiz(?:es)?|moisturis(?:es)?)\s+(?:your\s+|the\s+)?(?:skin|hair|scalp)\b'
+        r'|\b(?:moisturiz(?:ed)?|moisturis(?:ed)?|hydrated)\s+skin\b'
+        r'|\b(?:healthy|glowing|radiant|dry|oily|sensitive)\s+skin\s*$'
+        r'|\b(?:suitable|ideal|formulated|crafted)\s+for\s+(?:all\s+)?(?:skin|hair|types?)\b'
+        r'|\b(?:all|every)\s+(?:skin|hair)\s+types?\b'
+        r'|\b(?:long|all-?day)\s+lasting\s+(?:freshness|fragrance|hydration|moisture|protection)\b'
+        r'|\b(?:germ|bacterial|odour|odor)\s+protection\b'
+        r')'
     )
 
     def is_declaration_or_header(val):
@@ -1323,6 +1937,12 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
         if not val:
             return True
         if _is_field_label(val) or _looks_like_section_boundary(val):
+            return True
+        if instructional_steps_re.search(val) or dangling_prep_re.search(val) or leading_conj_re.search(val):
+            return True
+        if claims_or_attributes_re.search(val):
+            return True
+        if re.search(r'(?i)(?:feedback|complaints?|queries|query|careline|toll\s*free|(?:see|refer|read)\s*(?:above|below|side|bottom|pkg|pack|panel))', val):
             return True
         canonical = _canonical_label(val)
         if canonical:
@@ -1360,6 +1980,24 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
             return False
         return not bool(re.fullmatch(r'(?i)(?:product|information|details|label|select|of|in)', normalized))
 
+    # Regex that matches strings which look like price/rate codes or batch identifiers
+    # and therefore should never be treated as product names.
+    _price_code_re = re.compile(
+        r'(?i)'
+        r'(?:'
+        # price-like: digits optionally followed by /- or currency and more digits
+        r'\d+(?:[.,]\d+)?\s*/?[-]?\s*\d*(?:\.\d+)?\s*/\s*(?:ml|g|kg|l|gm|unit)'
+        r'|\d+\s*/[-]'
+        r'|Rs\.?\s*\d+'
+        r'|\d+\s*/-'
+        # batch/code-like: standalone uppercase alphanumeric codes with digits mixed in
+        r'|[A-Z]{1,4}\d{3,}'
+        r'|\d{3,}[A-Z]{1,4}'
+        # ratio/unit price patterns e.g. 0.72/ml
+        r'|\d+\.\d+\s*/\s*[a-zA-Z]+'
+        r')'
+    )
+
     def valid_unlabeled_candidate(value, block, reading_pos, entity_start_pos):
         """Validates an unlabeled candidate block. Strict conservative safety criteria apply."""
         if not value:
@@ -1382,6 +2020,15 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
         # Reject instructional or legal headers
         if instructional_or_legal_re.search(normalized):
             return False
+        # Reject instructional step phrases
+        if instructional_steps_re.search(normalized):
+            return False
+        # Reject trailing prepositions or conjunctions
+        if dangling_prep_re.search(normalized) or leading_conj_re.search(normalized):
+            return False
+        # Reject claim and attribute phrases (benefits, testing, formula, skin attributes)
+        if claims_or_attributes_re.search(normalized):
+            return False
         # High confidence requirement for unlabeled candidates
         if block.get("confidence", 1.0) < 0.75:
             return False
@@ -1391,16 +2038,24 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
             return False
         if _is_address_text(normalized) or COMPANY_SUFFIX_PATTERN.search(normalized):
             return False
-        if re.search(r'(?i)@|https?://|\b(?:mrp|net\s+(?:wt|qty)|telephone|phone|email|customer\s+care|country\s+of)\b', normalized):
+        if re.search(r'(?i)@|https?://|www\.|\.[a-z]{2,}\b|\b(?:mrp|net\s+(?:wt|qty)|telephone|phone|email|customer\s+care|country\s+of|trademark)\b|(?:feedback|complaints?|queries|query|careline|toll\s*free|(?:see|refer|read)\s*(?:above|below|side|bottom|pkg|pack|panel))', normalized):
             return False
         if re.match(r'^\d+$', normalized):
             return False
         norm_lower = normalized.lower()
         if any(norm_lower in used or used in norm_lower for used in used_values if len(used) > 2):
             return False
-        words = re.findall(r'[A-Za-z]{2,}', normalized)
+        # Must contain at least some meaningful alphabetic content
+        alpha_words = re.findall(r'[A-Za-z]{2,}', normalized)
         # Require between 2 and 5 descriptive words
-        if len(words) < 2 or len(words) > 5:
+        if len(alpha_words) < 2 or len(alpha_words) > 5:
+            return False
+        # Reject price/code/batch-like strings (e.g. 'AA*180/-0.72/ml', 'B011 @10/28')
+        if _price_code_re.search(normalized):
+            return False
+        # The string must not be dominated by non-alpha characters
+        alpha_ratio = sum(1 for ch in normalized if ch.isalpha()) / max(len(normalized), 1)
+        if alpha_ratio < 0.40:
             return False
         if bool(re.fullmatch(r'(?i)(?:product|information|details|label|select|of|in|everyday\s*protein)', normalized)):
             return False
@@ -1444,11 +2099,14 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
 def extract_fields(ocr_result: dict) -> dict:
     """
     Converts raw OCR output dictionary into structured fields matching the rule engine contract.
-    
+
     Expected input keys:
       - quality: dict with quality_status ('ACCEPTABLE', 'POOR', 'UNREADABLE')
       - full_text: str
       - text_blocks: list of dicts with 'text', 'confidence', 'box'
+
+    Returns a dict covering Rules 1–12 extraction fields.
+    Rule 12 (fontHeightMm) is always None until calibration_px_per_mm is available.
     """
     if not isinstance(ocr_result, dict):
         ocr_result = {}
@@ -1477,23 +2135,44 @@ def extract_fields(ocr_result: dict) -> dict:
     if not filtered_full_text and full_text:
         filtered_full_text = full_text
 
+    # -----------------------------------------------------------------------
     # Field Extractions using confidence-filtered text blocks
+    # -----------------------------------------------------------------------
     mrp = _extract_mrp(filtered_text_blocks, filtered_full_text)
     net_qty = _extract_net_quantity(filtered_text_blocks, filtered_full_text)
     mfg_name, mfg_addr = _extract_manufacturer(filtered_text_blocks, filtered_full_text, raw_blocks=text_blocks)
     month_pkd, year_pkd = _extract_dates(filtered_text_blocks, filtered_full_text)
+    exp_month, exp_year = _extract_expiry_date(filtered_text_blocks, filtered_full_text)  # Rule 10
     care_info = _extract_consumer_care(filtered_text_blocks, filtered_full_text)
     country_of_origin = _extract_country_of_origin(filtered_text_blocks, filtered_full_text)
+    importer_name = _extract_importer(filtered_text_blocks, filtered_full_text)           # Rule 9
+    unit_sale_price = _extract_unit_sale_price(filtered_text_blocks, filtered_full_text)  # Rule 11
+
+    # Rule 12: font height mm — always None without calibration reference.
+    font_height_mm = _extract_font_height_mm(filtered_text_blocks, calibration_px_per_mm=None)
 
     known_values = [mrp, net_qty, mfg_name, mfg_addr, care_info]
     product_name = _extract_product_name(filtered_text_blocks, filtered_full_text, known_values)
 
-    # Calculate weighted field-completeness score S
+    # -----------------------------------------------------------------------
+    # Extraction Confidence — weighted field-completeness + quality signals
+    #
+    # HIGH requires:
+    #   - ACCEPTABLE image quality
+    #   - High mean OCR confidence (>= 0.50)
+    #   - All four core statutory fields present (MRP, Net Qty, Mfg, Date)
+    #   - Completeness score >= 3.5 (i.e., most mandatory fields filled)
+    #
+    # LOW:    POOR/UNREADABLE quality, OR completeness_score < 2.0
+    # MEDIUM: everything else
+    # -----------------------------------------------------------------------
     mrp_pts = 1.0 if mrp is not None else 0.0
     qty_pts = 1.0 if net_qty is not None else 0.0
     mfg_pts = 1.0 if (mfg_name is not None or mfg_addr is not None) else 0.0
-    date_pts = 1.0 if (month_pkd is not None and year_pkd is not None) else (0.5 if (month_pkd is not None or year_pkd is not None) else 0.0)
-
+    date_pts = (
+        1.0 if (month_pkd is not None and year_pkd is not None)
+        else (0.5 if (month_pkd is not None or year_pkd is not None) else 0.0)
+    )
     care_pts = 0.5 if care_info is not None else 0.0
     prod_pts = 0.5 if product_name is not None else 0.0
 
@@ -1502,11 +2181,17 @@ def extract_fields(ocr_result: dict) -> dict:
     confidences = [b.get("confidence", 1.0) for b in filtered_text_blocks]
     mean_ocr_conf = sum(confidences) / len(confidences) if confidences else 0.0
 
-    # Strict confidence assignment:
-    # HIGH requires acceptable image quality, high mean OCR confidence, and full core statutory fields.
     if quality_status in ("POOR", "UNREADABLE") or completeness_score < 2.0:
         confidence_flag = "LOW"
-    elif quality_status == "ACCEPTABLE" and completeness_score >= 3.5 and mean_ocr_conf >= 0.50 and mrp is not None and net_qty is not None and (mfg_name is not None or mfg_addr is not None) and (month_pkd is not None or year_pkd is not None):
+    elif (
+        quality_status == "ACCEPTABLE"
+        and completeness_score >= 3.5
+        and mean_ocr_conf >= 0.50
+        and mrp is not None
+        and net_qty is not None
+        and (mfg_name is not None or mfg_addr is not None)
+        and (month_pkd is not None or year_pkd is not None)
+    ):
         confidence_flag = "HIGH"
     else:
         confidence_flag = "MEDIUM"
@@ -1519,12 +2204,16 @@ def extract_fields(ocr_result: dict) -> dict:
         "manufacturerName": mfg_name,
         "manufacturerAddress": mfg_addr,
         "packerName": None,
-        "importerName": None,
+        "importerName": importer_name,           # Rule 9
         "netQuantity": net_qty,
         "mrp": mrp,
+        "unitSalePrice": unit_sale_price,         # Rule 11
         "monthOfPacking": month_pkd,
         "yearOfPacking": year_pkd,
+        "expiryMonth": exp_month,                 # Rule 10
+        "expiryYear": exp_year,                   # Rule 10
         "consumerCare": care_info,
         "countryOfOrigin": country_of_origin,
+        "fontHeightMm": font_height_mm,           # Rule 12 — always None without calibration
         "extraction_confidence": confidence_flag
     }

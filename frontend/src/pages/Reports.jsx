@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import confetti from "canvas-confetti";
 import {
   BarChart3,
   CalendarDays,
@@ -18,6 +19,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { getScans } from "../services/api";
+import { generateAnalyticsReportPDF } from "../utils/reportGenerator";
 
 const statusStyles = {
   Passed: "bg-[#E8F8F0] text-[#07975F]",
@@ -192,7 +194,7 @@ function Reports() {
   });
 
   return (
-    <div className="min-h-full bg-[#F6F9FC] px-8 pt-8 py-6">
+    <div className="min-h-full bg-[#E3F5F2] px-8 pt-8 py-6">
 
       {/* Header */}
       {/* <div className="flex flex-wrap items-start justify-between gap-4"> */}
@@ -207,14 +209,33 @@ function Reports() {
           </p>
         </div>
 
-        <button className="flex items-center gap-2 rounded-lg bg-[#0F766E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0B625C]">
+        {/* <button className="flex items-center gap-2 rounded-lg bg-[#0F766E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0B625C]">
           <Download size={18} />
           Export Report
-        </button>
+        </button> */}
+        <button
+  onClick={() => {
+    if (scans.length === 0) return;
+    generateAnalyticsReportPDF(scans);
+     confetti({
+    particleCount: 120,
+    spread: 70,
+    origin: {
+      x: 0.5,
+      y: 0.7,
+    },
+  });
+  }}
+  disabled={loading || scans.length === 0}
+  className="flex items-center gap-2 rounded-lg bg-[#0F766E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0B625C] disabled:cursor-not-allowed disabled:opacity-50"
+>
+  <Download size={18} />
+  Export Report
+</button>
       </div>
 
       {/* Filters */}
-      <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-[#DDE6F0] bg-white p-4 shadow-sm">
+      <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-4 shadow-sm">
 
         <button className="flex min-w-[170px] items-center justify-between gap-4 rounded-lg border border-[#D8E1EB] px-4 py-2.5 text-sm text-[#405570]">
           <span className="flex items-center gap-2">
@@ -266,7 +287,7 @@ function Reports() {
       {/* Stats Cards */}
       <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-5">
 
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[#6B7F99]">
               Total Inspections
@@ -286,7 +307,7 @@ function Reports() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[#6B7F99]">Passed</p>
 
@@ -304,7 +325,7 @@ function Reports() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[#6B7F99]">Warnings</p>
 
@@ -322,7 +343,7 @@ function Reports() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[#6B7F99]">Failed</p>
 
@@ -340,7 +361,7 @@ function Reports() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[#6B7F99]">
               Avg. Compliance
@@ -366,7 +387,7 @@ function Reports() {
       <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.65fr_1fr]">
 
         {/* Inspection Trends */}
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-6 shadow-sm">
 
           <div className="flex items-start justify-between">
             <div>
@@ -454,7 +475,7 @@ function Reports() {
         </div>
 
         {/* Compliance Status Donut */}
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-6 shadow-sm">
 
           <h2 className="text-lg font-bold text-[#142B4A]">
             Compliance by Status
@@ -525,7 +546,7 @@ function Reports() {
       <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[1fr_1.45fr]">
 
         {/* Non Compliant Products */}
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-6 shadow-sm">
 
           <div className="flex items-center justify-between">
             <div>
@@ -593,7 +614,7 @@ function Reports() {
         </div>
 
         {/* Recent Inspections */}
-        <div className="rounded-2xl border border-[#DDE6F0] bg-white shadow-sm">
+        <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] shadow-sm">
 
           <div className="flex items-center justify-between border-b border-[#E6EDF4] px-6 py-5">
 

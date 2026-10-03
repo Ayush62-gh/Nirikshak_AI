@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getScans, getScanById } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import confetti from "canvas-confetti";
 import { generateComplianceReportPDF } from "../utils/reportGenerator";
 import {
   Search,
@@ -292,6 +293,14 @@ function History() {
     }
 
     handleExportReport(filteredInspections[0]);
+    confetti({
+    particleCount: 120,
+    spread: 70,
+    origin: {
+      x: 0.5,
+      y: 0.7,
+    },
+  });
   }}
 >
   <Download size={18} />

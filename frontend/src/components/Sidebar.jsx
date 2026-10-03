@@ -62,8 +62,15 @@ function Sidebar({ isMobileOpen, onClose })  {
           >
         <X size={22} />
         </button>
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white">
+        {/* <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white">
           <ShieldCheck size={26} />
+        </div> */}
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 overflow-hidden">
+        <img
+             src="/nirikshak-icon-2.png"
+             alt="NIRIKSHAK"
+             className="h-10 w-10 object-contain"
+             />
         </div>
 
         <div>

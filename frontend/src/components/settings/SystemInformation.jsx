@@ -3,7 +3,7 @@ import { Info, CheckCircle2, Server, CalendarDays } from "lucide-react";
 
 function SystemInformation() {
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm">
+    <section className="rounded-2xl bg-[#F1FAF8] p-6 shadow-sm">
 
       {/* Header */}
       <div className="mb-3 flex items-center gap-3">

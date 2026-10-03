@@ -9,7 +9,7 @@ import AccountSettings from "../components/settings/AccountSettings";
 
 function Settings() {
   return (
-    <div className="min-h-full bg-[#f5f8fc] px-6 py-6 lg:px-8">
+    <div className="min-h-full bg-[#E3F5F2] px-6 py-6 lg:px-8">
 
       {/* Page Header */}
       <div className="mb-6 flex items-center justify-between">

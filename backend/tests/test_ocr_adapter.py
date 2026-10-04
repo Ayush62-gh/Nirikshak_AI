@@ -1,5 +1,9 @@
+import io
 import pytest
 import httpx
+from PIL import Image
+from fastapi.testclient import TestClient
+from app.main import app
 from app.services.ocr_client import _parse_ocr_response, extract_fields, extract_fields_multi
 from app.core.config import settings
 
@@ -53,6 +57,7 @@ def test_parse_ocr_response_standard_mapping():
     assert result["unit_sale_price"] is None
     assert result["font_size_mm"] is None
     assert result["expiry_date"] is None
+    assert result["font_readability_px"] is None
 
 
 def test_parse_ocr_response_null_packing_dates():
@@ -303,3 +308,196 @@ async def test_extract_fields_multi_sends_repeated_files_parts(monkeypatch):
     assert result["font_size_mm"] == 2.0
     assert result["expiry_date"] == "11/2029"
     assert result["raw_ocr_text"] == "Front text and Back text MRP Rs. 99"
+
+
+def test_parse_ocr_response_font_readability_present():
+    # (a) key present gives the 4-key dict
+    ocr_response = {
+        "fields": {
+            "fontHeightPxComparison": {
+                "unit": "pixels",
+                "calibration_reference_used": False,
+                "measured_blocks": [
+                    {"block_index": 0, "text": "Net Wt 200g", "height_px": 12},
+                    {"block_index": 1, "text": "MRP Rs 45", "height_px": 18},
+                    {"block_index": 2, "text": "Mfg Date 05/2025", "height_px": 15},
+                ],
+                "smallest_height_px": 12,
+                "largest_height_px": 18,
+                "median_height_px": 15.0,
+                "height_range_px": [12, 18],
+            }
+        }
+    }
+    result = _parse_ocr_response(ocr_response)
+    assert result["font_readability_px"] == {
+        "smallest": 12,
+        "median": 15.0,
+        "largest": 18,
+        "block_count": 3,
+    }
+
+
+def test_parse_ocr_response_font_readability_absent_is_none():
+    # (b) key absent gives None with no exception
+    ocr_response_missing = {
+        "fields": {
+            "productName": "Simple Product",
+        }
+    }
+    result = _parse_ocr_response(ocr_response_missing)
+    assert result["font_readability_px"] is None
+
+    empty_result = _parse_ocr_response({})
+    assert empty_result["font_readability_px"] is None
+
+
+def test_parse_ocr_response_font_readability_empty_measured_blocks_is_none():
+    # (c) key present but measured_blocks empty gives None
+    ocr_response_empty_blocks = {
+        "fields": {
+            "fontHeightPxComparison": {
+                "unit": "pixels",
+                "calibration_reference_used": False,
+                "measured_blocks": [],
+                "smallest_height_px": None,
+                "largest_height_px": None,
+                "median_height_px": None,
+                "height_range_px": None,
+            }
+        }
+    }
+    result = _parse_ocr_response(ocr_response_empty_blocks)
+    assert result["font_readability_px"] is None
+
+    ocr_response_missing_blocks = {
+        "fields": {
+            "fontHeightPxComparison": {
+                "unit": "pixels",
+            }
+        }
+    }
+    result_missing = _parse_ocr_response(ocr_response_missing_blocks)
+    assert result_missing["font_readability_px"] is None
+
+
+def test_parse_ocr_response_font_size_mm_unaffected():
+    # (d) font_size_mm is unaffected (still None when fontHeightMm absent)
+    ocr_response_px_only = {
+        "fields": {
+            "fontHeightPxComparison": {
+                "measured_blocks": [
+                    {"block_index": 0, "text": "MRP", "height_px": 14}
+                ],
+                "smallest_height_px": 14,
+                "largest_height_px": 14,
+                "median_height_px": 14.0,
+            }
+        }
+    }
+    result = _parse_ocr_response(ocr_response_px_only)
+    assert result["font_readability_px"] == {
+        "smallest": 14,
+        "median": 14.0,
+        "largest": 14,
+        "block_count": 1,
+    }
+    assert result["font_size_mm"] is None
+
+    # When fontHeightMm is also present
+    ocr_response_both = {
+        "fields": {
+            "fontHeightMm": 2.5,
+            "fontHeightPxComparison": {
+                "measured_blocks": [
+                    {"block_index": 0, "text": "MRP", "height_px": 14}
+                ],
+                "smallest_height_px": 14,
+                "largest_height_px": 14,
+                "median_height_px": 14.0,
+            },
+        }
+    }
+    result_both = _parse_ocr_response(ocr_response_both)
+    assert result_both["font_size_mm"] == 2.5
+    assert result_both["font_readability_px"] == {
+        "smallest": 14,
+        "median": 14.0,
+        "largest": 14,
+        "block_count": 1,
+    }
+
+
+def test_scan_api_surfaces_font_readability_px(monkeypatch):
+    from app.services import ocr_client
+
+    client = TestClient(app)
+
+    user_payload = {
+        "email": "font_readability_tester@nirikshak.gov.in",
+        "password": "Password123!",
+        "full_name": "Font Tester",
+    }
+    reg = client.post("/api/auth/register", json=user_payload)
+    if reg.status_code == 201:
+        token = reg.json()["access_token"]
+    else:
+        login = client.post("/api/auth/login", json={"email": user_payload["email"], "password": user_payload["password"]})
+        token = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    expected_readability = {
+        "smallest": 12,
+        "median": 15.0,
+        "largest": 22,
+        "block_count": 4,
+    }
+
+    mock_extracted = {
+        "product_name": "Readability Biscuit",
+        "manufacturer": "ABC Foods Pvt Ltd",
+        "net_quantity": "100 g",
+        "mrp": "Rs. 20",
+        "batch_number": "B999",
+        "mfg_date": "04/2026",
+        "consumer_care": "care@abcfoods.com",
+        "raw_ocr_text": "Readability Biscuit 100g Rs 20",
+        "manufacturer_address": "Delhi, India",
+        "quality_status": "ACCEPTABLE",
+        "extraction_confidence": "HIGH",
+        "country_of_origin": "India",
+        "importer_name": None,
+        "unit_sale_price": "Rs. 0.20/g",
+        "font_size_mm": 1.8,
+        "expiry_date": "04/2027",
+        "font_readability_px": expected_readability,
+    }
+
+    async def mock_extract(*args, **kwargs):
+        return mock_extracted
+
+    monkeypatch.setattr(ocr_client, "extract_fields", mock_extract)
+
+    img = Image.new("RGB", (100, 100), color="blue")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    files = {"image": ("test_label.jpg", buf.getvalue(), "image/jpeg")}
+
+    # 1. POST /api/scan shows font_readability_px under extracted_fields
+    post_res = client.post("/api/scan", files=files, headers=headers)
+    assert post_res.status_code == 201
+    post_data = post_res.json()
+    scan_id = post_data["scan_id"]
+    assert post_data["extracted_fields"]["font_readability_px"] == expected_readability
+
+    # 2. GET /api/scans shows font_readability_px under extracted_fields
+    list_res = client.get("/api/scans", headers=headers)
+    assert list_res.status_code == 200
+    scans = list_res.json()["scans"]
+    target_scan = next(s for s in scans if s["scan_id"] == scan_id)
+    assert target_scan["extracted_fields"]["font_readability_px"] == expected_readability
+
+    # 3. GET /api/scans/{id} shows font_readability_px under extracted_fields
+    detail_res = client.get(f"/api/scans/{scan_id}", headers=headers)
+    assert detail_res.status_code == 200
+    assert detail_res.json()["extracted_fields"]["font_readability_px"] == expected_readability

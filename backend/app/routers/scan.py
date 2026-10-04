@@ -2,7 +2,7 @@ import io
 from PIL import Image
 from fastapi import APIRouter, File, UploadFile, Query, status, Depends
 from fastapi.responses import JSONResponse
-from app.services.scan_service import process_scan
+from app.services.scan_service import process_scan, process_scan_multi
 from app.db.session import get_scan, list_scans, count_scans
 from app.schemas.scan_schemas import ScanResponse, ScanListResponse, ErrorResponse
 from app.models.user import User
@@ -90,6 +90,46 @@ async def create_scan(
 
     filename = image.filename or "scan.jpg"
     return await process_scan(image_bytes, filename, user_id=current_user.id)
+
+
+@router.post(
+    "/scan/multi",
+    response_model=ScanResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}},
+    summary="Upload multiple package label images (1 to 4) for compliance scan",
+)
+async def create_scan_multi(
+    images: list[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not images or len(images) < 1:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content=ErrorResponse(
+                error="invalid_request",
+                detail="At least 1 image is required.",
+            ).model_dump(),
+        )
+
+    if len(images) > 4:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content=ErrorResponse(
+                error="too_many_images",
+                detail="Maximum of 4 images allowed per scan.",
+            ).model_dump(),
+        )
+
+    validated_images: list[tuple[str, bytes]] = []
+    for image in images:
+        image_bytes, error_response = await read_and_validate_image_file(image)
+        if error_response:
+            return error_response
+        filename = image.filename or "scan.jpg"
+        validated_images.append((filename, image_bytes))
+
+    return await process_scan_multi(validated_images, user_id=current_user.id)
 
 
 @router.get(

@@ -1,6 +1,6 @@
 import pytest
 import httpx
-from app.services.ocr_client import _parse_ocr_response, extract_fields
+from app.services.ocr_client import _parse_ocr_response, extract_fields, extract_fields_multi
 from app.core.config import settings
 
 
@@ -232,3 +232,72 @@ async def test_extract_fields_low_confidence_does_not_raise(monkeypatch, caplog)
     assert result["extraction_confidence"] == "LOW"
     assert result["quality_status"] == "POOR"
     assert "LOW confidence" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_extract_fields_multi_mock():
+    images = [("front.jpg", b"fake_bytes_1"), ("back.jpg", b"fake_bytes_2")]
+    result = await extract_fields_multi(images)
+    assert isinstance(result, dict)
+    assert result["product_name"] == "Sample Biscuits 200g"
+    assert result["batch_number"] == "B12345"
+
+
+@pytest.mark.anyio
+async def test_extract_fields_multi_sends_repeated_files_parts(monkeypatch):
+    multi_ocr_response = {
+        "success": True,
+        "total_images": 2,
+        "combined_full_text": "Front text and Back text MRP Rs. 99",
+        "fields": {
+            "productName": "Multi Biscuit",
+            "mrp": "Rs. 99",
+            "batchNumber": "MB999",
+            "countryOfOrigin": "India",
+            "importerName": "Multi Imports",
+            "unitSalePrice": "Rs. 0.99/g",
+            "fontHeightMm": 2.0,
+            "expiryMonth": "11",
+            "expiryYear": "2029",
+            "extraction_confidence": "HIGH",
+        },
+    }
+
+    posted_files = []
+
+    async def mock_post(self, url, **kwargs):
+        assert url == f"{settings.OCR_SERVICE_URL}/extract-multi"
+        assert "files" in kwargs
+        nonlocal posted_files
+        posted_files = kwargs["files"]
+        req = httpx.Request("POST", url)
+        return httpx.Response(200, json=multi_ocr_response, request=req)
+
+    monkeypatch.setattr(settings, "use_mock_ocr", False)
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+
+    test_images = [
+        ("front.jpg", b"front_bytes_123"),
+        ("back.jpg", b"back_bytes_456"),
+    ]
+    result = await extract_fields_multi(test_images)
+
+    # Verify repeated "files" parts were sent
+    assert len(posted_files) == 2
+    assert posted_files[0][0] == "files"
+    assert posted_files[0][1][0] == "front.jpg"
+    assert posted_files[0][1][1] == b"front_bytes_123"
+    assert posted_files[1][0] == "files"
+    assert posted_files[1][1][0] == "back.jpg"
+    assert posted_files[1][1][1] == b"back_bytes_456"
+
+    # Verify parsed through _parse_ocr_response
+    assert result["product_name"] == "Multi Biscuit"
+    assert result["mrp"] == "Rs. 99"
+    assert result["batch_number"] == "MB999"
+    assert result["country_of_origin"] == "India"
+    assert result["importer_name"] == "Multi Imports"
+    assert result["unit_sale_price"] == "Rs. 0.99/g"
+    assert result["font_size_mm"] == 2.0
+    assert result["expiry_date"] == "11/2029"
+    assert result["raw_ocr_text"] == "Front text and Back text MRP Rs. 99"

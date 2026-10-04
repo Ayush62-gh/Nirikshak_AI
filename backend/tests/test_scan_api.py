@@ -427,4 +427,120 @@ def test_post_scan_and_get_scans_new_extracted_fields(monkeypatch):
     assert detail_extracted["expiry_date"] == "03/2028"
 
 
+def test_post_scan_multi_success(monkeypatch):
+    from app.services import ocr_client
+
+    mock_extracted = {
+        "product_name": "Sample Biscuits 200g",
+        "manufacturer": "ABC Foods Pvt Ltd",
+        "net_quantity": "200 g",
+        "mrp": "Rs. 45",
+        "batch_number": "B12345",
+        "mfg_date": "01/2026",
+        "consumer_care": "1800-XXX-XXXX",
+        "raw_ocr_text": "Sample Biscuits 200g",
+        "manufacturer_address": "Delhi, India",
+        "quality_status": "ACCEPTABLE",
+        "extraction_confidence": "HIGH",
+        "country_of_origin": "India",
+        "importer_name": None,
+        "unit_sale_price": "Rs. 0.225/g",
+        "font_size_mm": 1.8,
+        "expiry_date": "01/2027",
+    }
+
+    async def mock_extract_multi(*args, **kwargs):
+        return mock_extracted
+
+    monkeypatch.setattr(ocr_client, "extract_fields_multi", mock_extract_multi)
+
+    headers = get_auth_header()
+    jpeg_bytes = make_test_jpeg_bytes()
+    png_bytes = make_test_png_bytes()
+
+    files = [
+        ("images", ("front.jpg", jpeg_bytes, "image/jpeg")),
+        ("images", ("back.png", png_bytes, "image/png")),
+    ]
+
+    response = client.post("/api/scan/multi", files=files, headers=headers)
+    assert response.status_code == 201
+    data = response.json()
+
+    # ScanResponse shape
+    assert "scan_id" in data
+    assert "user_id" in data
+    assert "timestamp" in data
+    assert "product" in data
+    assert "compliance" in data
+    assert "extracted_fields" in data
+    assert "image_ref" in data
+    assert data["image_ref"] == "uploads/front.jpg"
+
+    # New extracted_fields keys present
+    extracted = data["extracted_fields"]
+    assert "country_of_origin" in extracted
+    assert "importer_name" in extracted
+    assert "unit_sale_price" in extracted
+    assert "font_size_mm" in extracted
+    assert "expiry_date" in extracted
+    assert extracted["country_of_origin"] == "India"
+    assert extracted["unit_sale_price"] == "Rs. 0.225/g"
+    assert extracted["font_size_mm"] == 1.8
+    assert extracted["expiry_date"] == "01/2027"
+
+
+def test_post_scan_multi_more_than_4_images():
+    headers = get_auth_header()
+    jpeg_bytes = make_test_jpeg_bytes()
+
+    files = [
+        ("images", (f"img_{i}.jpg", jpeg_bytes, "image/jpeg"))
+        for i in range(5)
+    ]
+
+    response = client.post("/api/scan/multi", files=files, headers=headers)
+    assert response.status_code == 400
+    data = response.json()
+    assert "error" in data
+    assert "detail" in data
+    assert data["error"] == "too_many_images"
+
+
+def test_post_scan_multi_invalid_file_among_valid_ones():
+    headers = get_auth_header()
+
+    initial_list = client.get("/api/scans", headers=headers).json()
+    initial_total = initial_list["total"]
+
+    valid_jpeg = make_test_jpeg_bytes()
+    corrupted_data = b"not a valid image content at all"
+
+    files = [
+        ("images", ("front.jpg", valid_jpeg, "image/jpeg")),
+        ("images", ("corrupted.jpg", corrupted_data, "image/jpeg")),
+    ]
+
+    response = client.post("/api/scan/multi", files=files, headers=headers)
+    assert response.status_code == 400
+    data = response.json()
+    assert "error" in data
+    assert data["error"] == "invalid_image"
+
+    # Confirm no DB row was saved
+    final_list = client.get("/api/scans", headers=headers).json()
+    assert final_list["total"] == initial_total
+
+
+def test_post_scan_multi_no_auth():
+    jpeg_bytes = make_test_jpeg_bytes()
+    files = [
+        ("images", ("front.jpg", jpeg_bytes, "image/jpeg")),
+        ("images", ("back.jpg", jpeg_bytes, "image/jpeg")),
+    ]
+
+    response = client.post("/api/scan/multi", files=files)
+    assert response.status_code in (401, 403)
+
+
 

@@ -602,6 +602,20 @@ def process_product_images(image_paths, calibration_px_per_mm=None):
             "resolution_reason": reason
         }
 
+    # Pixel font heights are image-scale dependent, so they must NOT be merged
+    # across different camera angles/images. Aggregate only the relative readability
+    # status, while keeping per-image pixel metrics in the single-image extraction.
+    readability_statuses = [
+        ext["fields"].get("fontReadabilityStatus")
+        for ext in per_image_extractions
+    ]
+    if "NEEDS_REVIEW" in readability_statuses:
+        merged_fields["fontReadabilityStatus"] = "NEEDS_REVIEW"
+    elif "CONSISTENT" in readability_statuses:
+        merged_fields["fontReadabilityStatus"] = "CONSISTENT"
+    else:
+        merged_fields["fontReadabilityStatus"] = "INSUFFICIENT_DATA"
+
     # Set overall extraction_confidence grade for the merged result.
     # HIGH requires: no unresolved conflicts AND at least 2 core statutory fields extracted.
     # Simply having any extracted field is insufficient for HIGH confidence.

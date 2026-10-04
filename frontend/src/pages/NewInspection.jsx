@@ -511,7 +511,7 @@ const retakePhoto = () => {
                      Country of Origin
                     </p>
                     <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
-                        India
+                        {scanResult.extracted_fields?.country_of_origin || "Not Detected"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
@@ -519,7 +519,7 @@ const retakePhoto = () => {
                           Importer Name
                       </p>
                       <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
-                         ABC Imports Pvt Ltd
+                         {scanResult.extracted_fields?.importer_name || "Not Detected"}
                       </p>
                   </div>
 
@@ -528,7 +528,7 @@ const retakePhoto = () => {
                         Expiry Date
                     </p>
                     <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
-                      01/2028
+                      {scanResult.extracted_fields?.expiry_date || "Not Detected"}
                     </p>
                   </div>
 
@@ -537,7 +537,7 @@ const retakePhoto = () => {
                       Unit Sale Price
                     </p>
                     <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
-                      ₹225/kg
+                      {scanResult.extracted_fields?.unit_sale_price || "Not Detected"}
                     </p>
                   </div>
 
@@ -546,7 +546,7 @@ const retakePhoto = () => {
                        Font Size
                      </p>
                     <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
-                      2.0 mm
+                      {scanResult.extracted_fields?.font_size_mm || "Not Detected"}
                     </p>
                   </div>
 

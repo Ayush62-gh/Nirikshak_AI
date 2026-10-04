@@ -656,39 +656,39 @@ function History() {
                       </p>
                     </div>
                     <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
-  <p className="text-xs text-slate-400 font-medium">Country of Origin</p>
-  <p className="mt-1 font-semibold text-slate-800 break-words">
-    India
-  </p>
-</div>
+                     <p className="text-xs text-slate-400 font-medium">Country of Origin</p>
+                     <p className="mt-1 font-semibold text-slate-800 break-words">
+                    {scanDetails.extracted_fields?.country_of_origin || "Not Declared"} 
+                    </p>
+                   </div>
 
-<div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
-  <p className="text-xs text-slate-400 font-medium">Importer Name</p>
-  <p className="mt-1 font-semibold text-slate-800 break-words">
-    ABC Imports Pvt Ltd
-  </p>
-</div>
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+                  <p className="text-xs text-slate-400 font-medium">Importer Name</p>
+                  <p className="mt-1 font-semibold text-slate-800 break-words">
+                  {scanDetails.extracted_fields?.importer_name || "Not Declared"}
+                 </p>
+               </div>
 
-<div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
-  <p className="text-xs text-slate-400 font-medium">Expiry Date</p>
-  <p className="mt-1 font-semibold text-slate-800 break-words">
-    01/2028
-  </p>
-</div>
+               <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+               <p className="text-xs text-slate-400 font-medium">Expiry Date</p>
+               <p className="mt-1 font-semibold text-slate-800 break-words">
+               {scanDetails.extracted_fields?.expiry_date || "Not Declared"}
+               </p>
+              </div>
 
-<div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
-  <p className="text-xs text-slate-400 font-medium">Unit Sale Price</p>
-  <p className="mt-1 font-semibold text-slate-800 break-words">
-    ₹225/kg
-  </p>
-</div>
+             <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+              <p className="text-xs text-slate-400 font-medium">Unit Sale Price</p>
+              <p className="mt-1 font-semibold text-slate-800 break-words">
+                {scanDetails.extracted_fields?.unit_sale_price || "Not Detected"}
+              </p>
+            </div>
 
-<div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
-  <p className="text-xs text-slate-400 font-medium">Font Size</p>
-  <p className="mt-1 font-semibold text-slate-800 break-words">
-    2.0 mm
-  </p>
-</div>
+            <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+            <p className="text-xs text-slate-400 font-medium">Font Size</p>
+            <p className="mt-1 font-semibold text-slate-800 break-words">
+              {scanDetails.extracted_fields?.font_size_mm || "Not Detected"}
+             </p>
+            </div>
                   </div>
                 </div>
 

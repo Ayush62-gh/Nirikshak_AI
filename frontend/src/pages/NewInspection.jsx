@@ -14,8 +14,8 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-// import { submitScan } from "../services/api";
 import { submitScan, submitMultiScan } from "../services/api";
+import { formatFontSize } from "../utils/formatFontSize";
 
 function NewInspection() {
   const [images, setImages] = useState([]);
@@ -575,7 +575,7 @@ const retakePhoto = () => {
                        Font Size
                      </p>
                     <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
-                      {scanResult.extracted_fields?.font_size_mm || "Not Detected"}
+                      {formatFontSize(scanResult.extracted_fields)}
                     </p>
                   </div>
 

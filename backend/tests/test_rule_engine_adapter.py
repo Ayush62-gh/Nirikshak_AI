@@ -16,6 +16,10 @@ def test_build_rule_engine_request_mapping():
         "mrp": "Rs. 45",
         "mfg_date": "01/2026",
         "consumer_care": "1800-XXX-XXXX",
+        "country_of_origin": "India",
+        "importer_name": "ABC Importers Pvt Ltd",
+        "unit_sale_price": "Rs. 0.225/g",
+        "expiry_date": "01/2027",
     }
 
     request_body = _build_rule_engine_request(extracted)
@@ -26,12 +30,46 @@ def test_build_rule_engine_request_mapping():
     assert request_body["isImported"] is False
     assert request_body["manufacturerName"] == "ABC Foods Pvt Ltd"
     assert request_body["manufacturerAddress"] == "123 Industrial Estate, Delhi"
+    assert request_body["packerName"] is None
+    assert request_body["importerName"] == "ABC Importers Pvt Ltd"
     assert request_body["netQuantity"] == "200 g"
     assert request_body["mrp"] == "Rs. 45"
+    assert request_body["unitSalePrice"] == "Rs. 0.225/g"
     assert request_body["monthOfPacking"] == "01"
     assert request_body["yearOfPacking"] == "2026"
+    assert request_body["expiryDate"] == "01/2027"
     assert request_body["consumerCare"] == "1800-XXX-XXXX"
     assert request_body["countryOfOrigin"] == "India"
+    assert "fontSizeMm" not in request_body
+
+
+def test_build_rule_engine_request_no_hardcoded_india():
+    # (c) the rule payload no longer contains the hardcoded "India"
+    extracted_imported = {
+        "product_name": "Belgian Chocolate",
+        "country_of_origin": "Belgium",
+        "importer_name": "Euro Sweets Ltd",
+        "unit_sale_price": "Rs. 2.50/g",
+        "expiry_date": "10/2028",
+    }
+    request_body = _build_rule_engine_request(extracted_imported)
+    assert request_body["countryOfOrigin"] == "Belgium"
+    assert request_body["countryOfOrigin"] != "India"
+    assert request_body["importerName"] == "Euro Sweets Ltd"
+    assert request_body["unitSalePrice"] == "Rs. 2.50/g"
+    assert request_body["expiryDate"] == "10/2028"
+    assert "fontSizeMm" not in request_body
+
+    # When country_of_origin is omitted/None, it must be None, NOT "India"
+    extracted_empty = {
+        "product_name": "Domestic Flour",
+    }
+    request_body_empty = _build_rule_engine_request(extracted_empty)
+    assert request_body_empty["countryOfOrigin"] is None
+    assert request_body_empty["importerName"] is None
+    assert request_body_empty["unitSalePrice"] is None
+    assert request_body_empty["expiryDate"] is None
+    assert "fontSizeMm" not in request_body_empty
 
 
 def test_build_rule_engine_request_invalid_mfg_date():

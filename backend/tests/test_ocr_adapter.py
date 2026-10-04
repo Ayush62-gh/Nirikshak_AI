@@ -48,6 +48,11 @@ def test_parse_ocr_response_standard_mapping():
     assert result["manufacturer_address"] == "123 Industrial Estate, Delhi"
     assert result["quality_status"] == "ACCEPTABLE"
     assert result["extraction_confidence"] == "HIGH"
+    assert result["country_of_origin"] is None
+    assert result["importer_name"] is None
+    assert result["unit_sale_price"] is None
+    assert result["font_size_mm"] is None
+    assert result["expiry_date"] is None
 
 
 def test_parse_ocr_response_null_packing_dates():
@@ -86,6 +91,81 @@ def test_parse_ocr_response_partial_packing_dates():
         }
     }
     assert _parse_ocr_response(response_year_only)["mfg_date"] is None
+
+
+def test_parse_ocr_response_new_fields_present():
+    # (a) new keys present when OCR returns them
+    real_ocr_response = {
+        "quality": {
+            "quality_status": "ACCEPTABLE",
+        },
+        "full_text": "Sample Imported Biscuits",
+        "fields": {
+            "productName": "Imported Biscuits",
+            "countryOfOrigin": "Belgium",
+            "importerName": "Belgian Treats India Pvt Ltd",
+            "unitSalePrice": "Rs. 1.25/g",
+            "fontHeightMm": 2.5,
+            "expiryMonth": "08",
+            "expiryYear": "2027",
+            "extraction_confidence": "HIGH",
+        },
+    }
+
+    result = _parse_ocr_response(real_ocr_response)
+
+    assert result["country_of_origin"] == "Belgium"
+    assert result["importer_name"] == "Belgian Treats India Pvt Ltd"
+    assert result["unit_sale_price"] == "Rs. 1.25/g"
+    assert result["font_size_mm"] == 2.5
+    assert result["expiry_date"] == "08/2027"
+
+
+def test_parse_ocr_response_new_fields_none_when_absent_no_exception():
+    # (b) all new keys are None, with no exception, when OCR returns none of them
+    ocr_response_missing_fields = {
+        "quality": {},
+        "fields": {
+            "productName": "Simple Product",
+        },
+    }
+
+    result = _parse_ocr_response(ocr_response_missing_fields)
+
+    assert result["country_of_origin"] is None
+    assert result["importer_name"] is None
+    assert result["unit_sale_price"] is None
+    assert result["font_size_mm"] is None
+    assert result["expiry_date"] is None
+    assert result["batch_number"] is None
+
+    # Empty payload with empty dicts or missing keys
+    empty_result = _parse_ocr_response({})
+    assert empty_result["country_of_origin"] is None
+    assert empty_result["importer_name"] is None
+    assert empty_result["unit_sale_price"] is None
+    assert empty_result["font_size_mm"] is None
+    assert empty_result["expiry_date"] is None
+    assert empty_result["batch_number"] is None
+
+
+def test_parse_ocr_response_partial_expiry_dates():
+    # Expiry date should be None if only month or only year is present
+    res_month_only = {
+        "fields": {
+            "expiryMonth": "06",
+            "expiryYear": None,
+        }
+    }
+    assert _parse_ocr_response(res_month_only)["expiry_date"] is None
+
+    res_year_only = {
+        "fields": {
+            "expiryMonth": None,
+            "expiryYear": "2028",
+        }
+    }
+    assert _parse_ocr_response(res_year_only)["expiry_date"] is None
 
 
 @pytest.mark.anyio

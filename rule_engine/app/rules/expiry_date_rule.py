@@ -18,10 +18,10 @@ class ExpiryDateRule(AbstractRule):
     """
 
     EXPIRY_PATTERNS = [
-        re.compile(r'best\s*before\s*:?\s*\d+\s*(?:months?|years?|days?)', re.IGNORECASE),
-        re.compile(r'exp(?:iry)?\s*(?:date)?\s*:?\s*\d{1,2}[/\.-]\d{2,4}', re.IGNORECASE),
-        re.compile(r'use\s*by\s*:?\s*\d{1,2}[/\.-]\d{2,4}', re.IGNORECASE),
-        re.compile(r'\d{1,2}[/\.-]\d{2,4}', re.IGNORECASE),
+        re.compile(r'\bbest\s*before\s*:?\s*\d+\s*(?:months?|years?|days?)\b', re.IGNORECASE),
+        re.compile(r'\bexp(?:iry)?\s*(?:date)?\s*:?\s*(?:0?[1-9]|1[0-2])[/\.-]\d{2,4}\b', re.IGNORECASE),
+        re.compile(r'\buse\s*by\s*:?\s*(?:0?[1-9]|1[0-2])[/\.-]\d{2,4}\b', re.IGNORECASE),
+        re.compile(r'\b(?:0?[1-9]|1[0-2])[/\.-](?:20\d{2}|\d{4})\b', re.IGNORECASE),
     ]
 
     PERISHABLE_TYPES = {"food", "cosmetics", "pharma", "pharmaceuticals", "drug", "drugs", "beverage", "beverages"}
@@ -73,9 +73,9 @@ class ExpiryDateRule(AbstractRule):
             return IndividualRuleResult(
                 ruleId=self.rule_id,
                 ruleName=self.rule_name,
-                status=RuleStatus.PASS,
-                severity=self.severity,
-                message=f"Expiry / Best Before text declared: '{expiry_val}'."
+                status=RuleStatus.MANUAL_REVIEW,
+                severity=RuleSeverity.MEDIUM,
+                message=f"Expiry / Best Before text '{expiry_val}' is non-standard; manual label verification required."
             )
 
         ptype = (product.productType or "").strip().lower()
@@ -90,10 +90,19 @@ class ExpiryDateRule(AbstractRule):
                 message=f"Mandatory Best Before / Expiry Date declaration is missing for perishable category '{product.productType}'."
             )
 
+        if ptype:
+            return IndividualRuleResult(
+                ruleId=self.rule_id,
+                ruleName=self.rule_name,
+                status=RuleStatus.NOT_APPLICABLE,
+                severity=self.severity,
+                message="Expiry date declaration is not mandatory for non-perishable commodity."
+            )
+
         return IndividualRuleResult(
             ruleId=self.rule_id,
             ruleName=self.rule_name,
             status=RuleStatus.MANUAL_REVIEW,
-            severity=RuleSeverity.LOW,
+            severity=RuleSeverity.MEDIUM,
             message="Expiry date declaration is not present; verify if commodity is non-perishable."
         )

@@ -38,20 +38,23 @@ $$\text{FAIL} \succ \text{MANUAL\_REVIEW} \succ \text{PASS} \succ \text{NOT\_APP
 
 ## A. VERIFIED MACHINE-CHECKABLE RULES
 
+> **Note**: Legal references abhi official Rules text se verify hone baaki hain.
+
 Active statutory rules that evaluate structured product JSON payloads and populate standardized result DTOs containing `ruleId`, `ruleName`, `status`, `severity`, `message`, `field`, and `evidence`.
 
 ### 1. `LM-RULE-MRP-001`: Maximum Retail Price (MRP) Declaration Check
 - **Rule ID**: `LM-RULE-MRP-001`
 - **Rule Name**: Maximum Retail Price (MRP) Declaration Check
 - **Target Field**: `mrp`
-- **Legal Reference**: Rule 6(1)(e) & Rule 2(m), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(e) & Rule 2(m) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all retail packaged commodities.
 - **Required Input**: `mrp` (string)
-- **PASS Behavior**: Returns `PASS` when numeric price, currency symbol/indicator (`₹`, `Rs`, `INR`), AND statutory tax inclusion phrase (`incl. of all taxes` / `inclusive of all taxes`) are clearly present in structured data.
+- **PASS Behavior**: Returns `PASS` when numeric digits AND a statutory tax inclusion phrase (`incl. of all taxes` / `inclusive of all taxes` or Hindi equivalents like `सब कर सहित`, `सभी करों सहित`, `कर सहित`, `कर सहित मूल्य`) are present. Explicit currency symbol/words (`₹`, `Rs`, `INR`, `mrp`, `रु`, `रू`, `मूल्य`) are checked but digits + tax clause is sufficient.
 - **FAIL Behavior**: Returns `FAIL` when `mrp` is completely missing, empty, or contains no numeric price value.
-- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when a numeric price value is present, but statutory presentation layout or tax inclusion clause (`incl. of all taxes`) cannot be verified from structured input.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when numeric price digits are present, but statutory tax inclusion phrase (`incl. of all taxes`) is missing.
 - **NOT_APPLICABLE Behavior**: N/A (Applies universally to retail packaged goods).
 - **Severity**: **CRITICAL**
+> **Known Limitation**: Code permits passing MRP validation based on numeric digits and tax clause without strictly requiring a standard currency symbol ('₹' or 'Rs'). [VERIFY against official Rules text]
 
 ---
 
@@ -59,7 +62,7 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-NETQTY-002`
 - **Rule Name**: Net Quantity Declaration Check
 - **Target Field**: `netQuantity`
-- **Legal Reference**: Rule 6(1)(c), Rule 11 & Rule 12, Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(c), Rule 11 & Rule 12 [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all packaged commodities.
 - **Required Input**: `netQuantity` (string)
 - **PASS Behavior**: Returns `PASS` when numeric quantity AND a valid statutory metric unit matching standard categories (`WEIGHT`, `VOLUME`, `LENGTH`, `AREA`, `NUMBER_OR_UNIT`) are present.
@@ -74,7 +77,7 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-IMP-003`
 - **Rule Name**: Importer Name & Address Check for Foreign Commodities
 - **Target Field**: `importerName`
-- **Legal Reference**: Rule 6(1)(a), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(a) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Evaluated directly against `isImported == True`.
 - **Required Input**: `isImported` (boolean), `importerName` (string)
 - **PASS Behavior**: Returns `PASS` when `isImported == True` and importer name/details are declared.
@@ -89,7 +92,7 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-NAME-004`
 - **Rule Name**: Generic / Commodity Name Declaration Check
 - **Target Field**: `productName`
-- **Legal Reference**: Rule 6(1)(b), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(b) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all retail packaged commodities.
 - **Required Input**: `productName` (string)
 - **PASS Behavior**: Returns `PASS` when generic or common name of commodity is present in structured payload.
@@ -104,12 +107,12 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-MFGNAME-005`
 - **Rule Name**: Manufacturer or Packer Name Declaration Check
 - **Target Field**: `manufacturerName`
-- **Legal Reference**: Rule 6(1)(a), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(a) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all domestic packaged commodities (`isImported != True`) or where manufacturer details are specified.
 - **Required Input**: `manufacturerName` (string), `packerName` (string), `isImported` (boolean)
-- **PASS Behavior**: Returns `PASS` when `manufacturerName` or `packerName` declaration is clearly present in structured data.
-- **FAIL Behavior**: Returns `FAIL` when both `manufacturerName` AND `packerName` are completely missing on a domestic package.
-- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when legal relationship or completeness cannot be determined from structured payload.
+- **PASS Behavior**: Returns `PASS` when `manufacturerName` or `packerName` declaration is present in structured payload.
+- **FAIL Behavior**: Returns `FAIL` when both `manufacturerName` AND `packerName` are missing on a domestic package payload.
+- **MANUAL_REVIEW Behavior**: N/A.
 - **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when product is explicitly imported (`isImported == True`) and no manufacturer details are specified.
 - **Severity**: **CRITICAL**
 
@@ -119,14 +122,15 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-MFGADDR-006`
 - **Rule Name**: Manufacturer or Packer Address Declaration Check
 - **Target Field**: `manufacturerAddress`
-- **Legal Reference**: Rule 6(1)(a), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(a) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all domestic packages (`isImported != True`) or where manufacturer details are specified.
 - **Required Input**: `manufacturerAddress` (string), `isImported` (boolean)
-- **PASS Behavior**: Returns `PASS` when `manufacturerAddress` text is present in structured payload.
-- **FAIL Behavior**: Returns `FAIL` when `manufacturerAddress` is completely missing or empty.
-- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when address text is present but physical label completeness cannot be determined.
+- **PASS Behavior**: Returns `PASS` when `manufacturerAddress` text contains a 6-digit Indian postal pincode.
+- **FAIL Behavior**: Returns `FAIL` when `manufacturerAddress` is completely missing or empty string.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when `manufacturerAddress` text is present but lacks a 6-digit Indian pincode.
 - **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when product is explicitly imported (`isImported == True`) and no manufacturer address is specified.
 - **Severity**: **HIGH**
+> **Known Limitation**: 6-digit numbers in address text (such as batch or licence numbers) may be incorrectly matched as postal pincodes.
 
 ---
 
@@ -134,12 +138,12 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-DATE-007`
 - **Rule Name**: Month and Year of Packing / Manufacture Check
 - **Target Field**: `monthOfPacking`
-- **Legal Reference**: Rule 6(1)(d), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(d) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all retail packaged commodities.
 - **Required Input**: `monthOfPacking` (string), `yearOfPacking` (string)
 - **PASS Behavior**: Returns `PASS` when both Month AND Year of packing are declared in valid standard formats.
 - **FAIL Behavior**: Returns `FAIL` when both Month and Year are missing, OR only one of Month/Year is provided.
-- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when Month or Year format is non-standard (e.g. invalid month name or unverified year digits).
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when Month or Year format is non-standard.
 - **NOT_APPLICABLE Behavior**: N/A (Applies universally to retail packages).
 - **Severity**: **HIGH**
 
@@ -149,7 +153,7 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 - **Rule ID**: `LM-RULE-CARE-008`
 - **Rule Name**: Consumer Care Details Declaration Check
 - **Target Field**: `consumerCare`
-- **Legal Reference**: Rule 6(1)(h) & Rule 6(2), Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Legal Reference**: Rule 6(1)(h) & Rule 6(2) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 - **Applicability**: Applies to all retail packaged commodities.
 - **Required Input**: `consumerCare` (string)
 - **PASS Behavior**: Returns `PASS` when consumer care contact details (phone/email/address) are declared.
@@ -160,14 +164,101 @@ Active statutory rules that evaluate structured product JSON payloads and popula
 
 ---
 
+### 9. `LM-RULE-COO-009`: Country of Origin Declaration Check
+- **Rule ID**: `LM-RULE-COO-009`
+- **Rule Name**: Country of Origin Declaration Check
+- **Target Field**: `countryOfOrigin`
+- **Legal Reference**: Rule 6(1)(ab) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Applicability**: Applies to imported commodities (`isImported == True`) or when `countryOfOrigin` input is supplied.
+- **Required Input**: `isImported` (boolean), `countryOfOrigin` (string)
+- **PASS Behavior**: Returns `PASS` when `countryOfOrigin` string is non-empty.
+- **FAIL Behavior**: Returns `FAIL` when `isImported == True` and `countryOfOrigin` is missing or empty.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when `countryOfOrigin` is missing and import status is unconfirmed (`isImported == None`).
+- **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when product is explicitly domestic (`isImported == False`) and `countryOfOrigin` is unprovided.
+- **Severity**: **CRITICAL**
+
+---
+
+### 10. `LM-RULE-USP-010`: Unit Sale Price (USP) Declaration Check
+- **Rule ID**: `LM-RULE-USP-010`
+- **Rule Name**: Unit Sale Price (USP) Declaration Check
+- **Target Field**: `unitSalePrice`
+- **Legal Reference**: Rule 6(11) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011 (2021 DoCA Amendment).
+- **Applicability**: Applies when `unitSalePrice` is provided, USP pattern is detected in `mrp`, OR `netQuantity` contains numeric digits.
+- **Required Input**: `unitSalePrice` (string), `mrp` (string), `netQuantity` (string)
+- **PASS Behavior**: Returns `PASS` when standard USP pattern (e.g. `Rs 0.50/g`, `₹200/kg`) is detected in `unitSalePrice` or embedded in `mrp`.
+- **FAIL Behavior**: N/A (Missing USP currently triggers `MANUAL_REVIEW` pending statutory applicability threshold verification).
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when `unitSalePrice` text is non-standard, OR when `unitSalePrice` is missing but `netQuantity` is present.
+- **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when neither `unitSalePrice` nor numeric `netQuantity` is supplied.
+- **Severity**: **HIGH**
+
+---
+
+### 11. `LM-RULE-EXP-011`: Best Before / Expiry Date Declaration Check
+- **Rule ID**: `LM-RULE-EXP-011`
+- **Rule Name**: Best Before / Expiry Date Declaration Check
+- **Target Field**: `expiryDate`
+- **Legal Reference**: Rule 6(1)(d) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011 & FSSAI Guidelines.
+- **Applicability**: Applies to perishable product types (`food`, `cosmetics`, `pharma`, etc.) OR when `expiryDate` is supplied.
+- **Required Input**: `productType` (string), `expiryDate` (string)
+- **PASS Behavior**: Returns `PASS` when valid expiry format (e.g. `Best Before 12 Months`, `Exp: 12/2027`, `08/2026`) is present.
+- **FAIL Behavior**: Returns `FAIL` when perishable product lacks expiry date declaration.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when `expiryDate` text is non-standard or unparseable (e.g. `abc`, `99/2027`), OR when product type is unconfirmed.
+- **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when product is non-perishable and lacks expiry date declaration.
+- **Severity**: **HIGH**
+
+---
+
+### 12. `LM-RULE-FONT-012`: Font Size & Readability Analysis Check
+- **Rule ID**: `LM-RULE-FONT-012`
+- **Rule Name**: Font Size & Readability Analysis Check
+- **Target Field**: `fontSizeMm`
+- **Legal Reference**: Rule 7 & Rule 9 [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Applicability**: Applies ONLY when physical font height measurement (`fontSizeMm`) is supplied in request payload.
+- **Required Input**: `fontSizeMm` (float)
+- **PASS Behavior**: Returns `PASS` when `fontSizeMm >= 1.0` mm.
+- **FAIL Behavior**: Returns `FAIL` when `fontSizeMm < 1.0` mm.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when `fontSizeMm` measurement is missing/unprovided when called directly.
+- **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when `fontSizeMm` is not supplied in product payload.
+- **Severity**: **HIGH**
+
+---
+
+### 13. `LM-RULE-PLACE-013`: Declaration Placement & PDP Panel Check
+- **Rule ID**: `LM-RULE-PLACE-013`
+- **Rule Name**: Declaration Placement & PDP Panel Check
+- **Target Field**: `declarationPlacement`
+- **Legal Reference**: Rule 6 & Rule 7 [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Applicability**: Applies when `declarationPlacement` text OR `isPDPPlacementValid` boolean is supplied in request payload.
+- **Required Input**: `declarationPlacement` (string), `isPDPPlacementValid` (boolean)
+- **PASS Behavior**: Returns `PASS` when `isPDPPlacementValid == True` OR placement text indicates Principal Display Panel / Front Panel.
+- **FAIL Behavior**: Returns `FAIL` when `isPDPPlacementValid == False`.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when placement text location requires manual verification.
+- **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when placement metadata is not supplied in request payload.
+- **Severity**: **HIGH**
+
+---
+
+### 14. `LM-RULE-READ-014`: Physical Legibility & Color Contrast Check
+- **Rule ID**: `LM-RULE-READ-014`
+- **Rule Name**: Physical Legibility & Color Contrast Check
+- **Target Field**: `contrastRatio`
+- **Legal Reference**: Rule 8 [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
+- **Applicability**: Applies when `contrastRatio` float measurement OR `isLegible` boolean is supplied in request payload.
+- **Required Input**: `contrastRatio` (float), `isLegible` (boolean)
+- **PASS Behavior**: Returns `PASS` when `contrastRatio >= 4.5` OR `isLegible == True`.
+- **FAIL Behavior**: Returns `FAIL` when `contrastRatio < 3.0` OR `isLegible == False`.
+- **MANUAL_REVIEW Behavior**: Returns `MANUAL_REVIEW` when contrast ratio is between 3.0 and 4.5.
+- **NOT_APPLICABLE Behavior**: Returns `NOT_APPLICABLE` when contrast metadata is not supplied in request payload.
+- **Severity**: **HIGH**
+
+---
+
 ## B. RULES REQUIRING ADDITIONAL INPUT
 
 Rules requiring additional structured metadata fields before automated machine evaluation can be executed.
 
-1. **Country of Origin Rule (Rule 6(1)(ab))**:
-   - *Status*: Architecture prepared as a separate standalone rule.
-   - *Required Input*: `countryOfOrigin` string and `isImported` flag.
-   - *Requirement*: Mandatory for imported goods under 2017/2020 Legal Metrology amendments.
+*(None currently. All supported rules evaluate structured request payloads directly).*
 
 ---
 
@@ -175,10 +266,7 @@ Rules requiring additional structured metadata fields before automated machine e
 
 Physical label and visual parameters that cannot be proven solely by text strings in structured JSON payloads and currently return `MANUAL_REVIEW` where applicable:
 
-- **Font Size & Text Height (Rule 7 & Rule 9)**: Minimum physical font height in millimeters based on net quantity package area.
-- **Declaration Placement & Principal Display Panel Layout (Rule 6 & Rule 7)**: Specific label panel positioning and prominence.
-- **Physical Legibility & Color Contrast (Rule 8)**: Visual contrast between printed text and packaging background.
-- **Physical Package Dimensions**: Overall surface area calculations.
+- **Physical Package Surface Dimensions**: Overall surface area calculations.
 
 ---
 
@@ -186,13 +274,4 @@ Physical label and visual parameters that cannot be proven solely by text string
 
 Pending statutory rules documented for future implementation:
 
-1. **Unit Sale Price Rule (Rule 6(11) - 2021 Amendment)**:
-   - *Status*: Pending separate implementation.
-   - *Reason*: Requires configurable applicability logic, quantity basis, thresholds/exceptions, and applicable amendment/version handling. Must not be implemented using guessed thresholds.
-
-2. **Best Before / Use By Declaration Rule**:
-   - *Status*: Requires product-category and applicability information before implementation.
-   - *Reason*: Mandatory for perishable commodities, food, cosmetics, and drugs, but exempted for long-shelf-life non-perishables. Not marked as an active rule.
-
-3. **Country of Origin Rule (Rule 6(1)(ab))**:
-   - *Status*: Prepared for separate future implementation as an independent rule.
+*(None currently pending. All active statutory rules have been integrated into Section A).*

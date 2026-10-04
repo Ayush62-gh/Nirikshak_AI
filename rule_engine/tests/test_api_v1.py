@@ -34,7 +34,8 @@ def test_api_v1_compliance_check_pass():
         "mrp": "Rs. 450.00 (incl. of all taxes)",
         "monthOfPacking": "08",
         "yearOfPacking": "2026",
-        "consumerCare": "care@himalayantea.com"
+        "consumerCare": "care@himalayantea.com",
+        "unitSalePrice": "Rs 1.80/g"
     }
     response = client.post("/api/v1/compliance/check", json=payload)
     assert response.status_code == 200

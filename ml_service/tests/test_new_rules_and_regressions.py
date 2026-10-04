@@ -658,7 +658,7 @@ def test_font_height_mm_calibrated_returns_value():
     """When calibration is provided, _extract_font_height_mm returns a mm value."""
     from field_extractor import _extract_font_height_mm
     blocks = [
-        {"text": "Test", "confidence": 0.9, "box": [[0, 0], [100, 0], [100, 40], [0, 40]]},
+        {"text": "MRP Rs. 50", "confidence": 0.9, "box": [[0, 0], [100, 0], [100, 40], [0, 40]]},
     ]
     # 40 pixels / 5.0 px_per_mm = 8.0 mm
     result = _extract_font_height_mm(blocks, calibration_px_per_mm=5.0)
@@ -958,4 +958,276 @@ def test_product_name_accepts_explicit_baby_steps_lotion():
     assert res["productName"] == "Baby Steps Lotion"
 
 
+# ===========================================================================
+# BATCH NUMBER EXTRACTION TESTS
+# ===========================================================================
 
+def test_batch_number_batch_no_b12345():
+    """Requirement 1: 'Batch No: B12345' -> 'B12345'."""
+    blocks = [
+        _make_block("Batch No: B12345", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "B12345"
+
+
+def test_batch_number_batch_number_abc123():
+    """Requirement 2: 'Batch Number: ABC123' -> 'ABC123'."""
+    blocks = [
+        _make_block("Batch Number: ABC123", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "ABC123"
+
+
+def test_batch_number_batch_with_trailing_mfg():
+    """Requirement 3: 'Batch: B12345 Mfg 03/2026' -> 'B12345'."""
+    blocks = [
+        _make_block("Batch: B12345 Mfg 03/2026", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "B12345"
+
+
+def test_batch_number_lot_no_l9876():
+    """Requirement 4: 'Lot No: L9876' -> 'L9876'."""
+    blocks = [
+        _make_block("Lot No: L9876", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "L9876"
+
+
+def test_batch_number_for_batch_no():
+    """Canonical label: 'FOR BATCH NO: B12345' -> 'B12345'."""
+    blocks = [
+        _make_block("FOR BATCH NO: B12345", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "B12345"
+
+
+def test_batch_number_none_when_absent():
+    """Requirement 5: No batch label/value -> None."""
+    blocks = [
+        _make_block("MRP Rs. 150.00", confidence=0.95),
+        _make_block("Net Qty 250ml", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] is None
+
+
+def test_batch_number_with_expiry_and_mrp_stops():
+    """Requirement 6: Batch line containing expiry/mfg date/MRP -> batch value only."""
+    blocks = [
+        _make_block("Batch No: X7A92 Exp: 12/2026 MRP Rs 99.00", confidence=0.95),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "X7A92"
+
+
+def test_batch_number_ambiguous_or_instructional_returns_none():
+    """Requirement 7: Ambiguous/malformed batch text -> None."""
+    # Instruction text
+    blocks_crimp = [_make_block("Batch No: See crimp of tube", confidence=0.95)]
+    assert extract_fields(_ocr(blocks_crimp))["batchNumber"] is None
+
+    blocks_refer = [_make_block("Batch Number: Refer to bottom seal", confidence=0.95)]
+    assert extract_fields(_ocr(blocks_refer))["batchNumber"] is None
+
+    # Pure date mistakenly matched
+    blocks_date = [_make_block("Batch: 03/2026", confidence=0.95)]
+    assert extract_fields(_ocr(blocks_date))["batchNumber"] is None
+
+    # Pure price
+    blocks_price = [_make_block("Batch: Rs. 150.00", confidence=0.95)]
+    assert extract_fields(_ocr(blocks_price))["batchNumber"] is None
+
+    # Pure net quantity
+    blocks_qty = [_make_block("Batch No: 500g", confidence=0.95)]
+    assert extract_fields(_ocr(blocks_qty))["batchNumber"] is None
+
+
+def test_batch_number_split_across_blocks():
+    """Multi-block support: label in block 1, value in block 2."""
+    blocks = [
+        _make_block("Batch No:", confidence=0.95, y=10),
+        _make_block("BT9876", confidence=0.95, y=30),
+    ]
+    res = extract_fields(_ocr(blocks))
+    assert res["batchNumber"] == "BT9876"
+
+
+def test_batch_number_present_in_output_schema():
+    """batchNumber must always be present in extract_fields dictionary."""
+    res = extract_fields({"quality": {}, "full_text": "", "text_blocks": []})
+    assert "batchNumber" in res
+    assert "fontSizeMm" not in res
+    assert "fontHeightMm" in res
+
+
+# ===========================================================================
+# FONT HEIGHT MM CALIBRATION TESTS
+# ===========================================================================
+
+def test_font_height_mm_valid_calibration():
+    """Requirement 1: Valid calibration computes correct fontHeightMm."""
+    blocks = [
+        _make_block("Batch No: B12345", confidence=0.95, y=0, h=40),
+    ]
+    # 40px / 10 px_per_mm = 4.0 mm
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=10.0)
+    assert res["fontHeightMm"] == 4.0
+
+
+def test_font_height_mm_no_calibration_is_none():
+    """Requirement 2: No calibration -> fontHeightMm is None."""
+    blocks = [
+        _make_block("Batch No: B12345", confidence=0.95, y=0, h=40),
+    ]
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=None)
+    assert res["fontHeightMm"] is None
+
+
+def test_font_height_mm_zero_calibration_is_none():
+    """Requirement 3: Zero calibration -> fontHeightMm is None."""
+    blocks = [
+        _make_block("Batch No: B12345", confidence=0.95, y=0, h=40),
+    ]
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=0)
+    assert res["fontHeightMm"] is None
+    res_float = extract_fields(_ocr(blocks), calibration_px_per_mm=0.0)
+    assert res_float["fontHeightMm"] is None
+
+
+def test_font_height_mm_negative_calibration_is_none():
+    """Requirement 4: Negative calibration -> fontHeightMm is None."""
+    blocks = [
+        _make_block("Batch No: B12345", confidence=0.95, y=0, h=40),
+    ]
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=-5.0)
+    assert res["fontHeightMm"] is None
+
+
+def test_font_height_mm_invalid_calibration_is_none():
+    """Requirement 5: Invalid/unusable calibration -> fontHeightMm is None."""
+    blocks = [
+        _make_block("Batch No: B12345", confidence=0.95, y=0, h=40),
+    ]
+    for invalid_val in ["not_a_number", None, float("nan"), float("inf"), float("-inf")]:
+        res = extract_fields(_ocr(blocks), calibration_px_per_mm=invalid_val)
+        assert res["fontHeightMm"] is None
+
+
+def test_font_height_mm_output_keys_unchanged():
+    """Requirement 6: Key name must remain fontHeightMm; no fontSizeMm."""
+    blocks = [
+        _make_block("MRP Rs 50", confidence=0.95, y=0, h=30),
+    ]
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=5.0)
+    assert "fontHeightMm" in res
+    assert "fontSizeMm" not in res
+    assert res["fontHeightMm"] == 6.0
+
+
+def test_font_height_mm_selects_minimum_statutory_declaration():
+    """
+    Requirement 9: Font height is determined by minimum height among relevant statutory declaration blocks.
+    Product name (100 px) and Logo (80 px) are ignored.
+    Statutory declarations:
+      - MRP: 24 px
+      - Net Quantity: 22 px
+      - Consumer Care: 20 px
+    Expected minimum selected height: 20 px.
+    With calibration 10.0 px/mm -> fontHeightMm == 2.0 (NOT 10.0 from 100px product name).
+    """
+    blocks = [
+        _make_block("SUPER BISCUITS EXTRA DELIGHT 200g", confidence=0.95, y=0, h=100),
+        _make_block("DELIGHT FOODS LOGO", confidence=0.95, y=110, h=80),
+        _make_block("MRP Rs. 50.00 (incl. of all taxes)", confidence=0.95, y=200, h=24),
+        _make_block("Net Quantity: 200g", confidence=0.95, y=230, h=22),
+        _make_block("Customer Care: care@brand.com", confidence=0.95, y=260, h=20),
+    ]
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=10.0)
+    assert res["fontHeightMm"] == 2.0
+
+
+def test_font_height_mm_unrelated_large_text_does_not_affect_result():
+    """
+    Requirement 10: Unrelated large text (promotional claims, banners) does not affect statutory font height.
+    """
+    blocks = [
+        _make_block("NOW WITH 50% MORE CRUNCHY DELIGHT", confidence=0.95, y=0, h=160),
+        _make_block("3 Steps for Glowing Radiant Skin", confidence=0.95, y=170, h=90),
+        _make_block("Net Wt. 100g", confidence=0.95, y=270, h=30),
+    ]
+    # 30px / 10.0 px_per_mm = 3.0 mm (NOT 16.0 mm from 160px banner)
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=10.0)
+    assert res["fontHeightMm"] == 3.0
+
+
+def test_font_height_mm_none_when_no_statutory_blocks_present():
+    """
+    Requirement 11: When no relevant statutory declaration blocks are found, fontHeightMm is None
+    even if valid calibration is provided.
+    """
+    blocks = [
+        _make_block("CRUNCHY WAFER BITES", confidence=0.95, y=0, h=90),
+        _make_block("Delicious taste for everyone", confidence=0.95, y=100, h=45),
+        _make_block("8901234567890", confidence=0.95, y=150, h=30),
+    ]
+    res = extract_fields(_ocr(blocks), calibration_px_per_mm=10.0)
+    assert res["fontHeightMm"] is None
+
+
+# ===========================================================================
+# MULTI-IMAGE CANDIDATE SELECTION FOR batchNumber
+# ===========================================================================
+
+def test_multi_image_batch_number_candidate_selection(monkeypatch):
+    """Multi-image candidate scoring selects the safest/highest-evidence batch number."""
+    import image_processor
+    from image_processor import process_product_images
+    import paddle_ocr
+
+    monkeypatch.setattr(image_processor, "check_image_quality", lambda path: {
+        "success": True,
+        "quality": {"quality_status": "ACCEPTABLE", "blur_score": 90.0, "brightness": 120.0, "is_blurry": False}
+    })
+
+    # Simulate 2 images:
+    # Image 1: has clear "Batch No: B12345"
+    # Image 2: has weak "Batch: See crimp"
+    call_idx = 0
+
+    def mock_extract_text(image_path, **kwargs):
+        nonlocal call_idx
+        call_idx += 1
+        if call_idx == 1:
+            return {
+                "success": True,
+                "full_text": "Batch No: B12345 Net Qty 100g",
+                "text_blocks": [
+                    _make_block("Batch No: B12345", 0.95),
+                    _make_block("Net Qty 100g", 0.90),
+                ],
+                "annotated_image_path": None,
+            }
+        else:
+            return {
+                "success": True,
+                "full_text": "Batch: See crimp Net Qty 100g",
+                "text_blocks": [
+                    _make_block("Batch: See crimp", 0.95),
+                    _make_block("Net Qty 100g", 0.90),
+                ],
+                "annotated_image_path": None,
+            }
+
+    monkeypatch.setattr(paddle_ocr, "extract_text", mock_extract_text)
+
+    # Call process_product_images with dummy paths
+    result = process_product_images(["dummy1.jpg", "dummy2.jpg"], calibration_px_per_mm=10.0)
+    assert result["success"] is True
+    assert result["fields"]["batchNumber"] == "B12345"
+    assert result["fields"]["fontHeightMm"] is not None

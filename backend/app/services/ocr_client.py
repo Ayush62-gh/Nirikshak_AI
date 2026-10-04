@@ -43,7 +43,7 @@ def _parse_ocr_response(response: dict) -> dict:
         "manufacturer": fields.get("manufacturerName"),
         "net_quantity": fields.get("netQuantity"),
         "mrp": fields.get("mrp"),
-        "batch_number": None,
+        "batch_number": fields.get("batchNumber"),
         "mfg_date": mfg_date,
         "consumer_care": fields.get("consumerCare"),
         "raw_ocr_text": response.get("full_text"),

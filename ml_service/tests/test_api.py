@@ -74,6 +74,35 @@ def test_extract_endpoint_valid_image(tmp_path, monkeypatch):
         assert len(data["text_blocks"]) == 1
         assert "blur_score" in data["quality"]
         assert "mrp" in data["fields"]
+        assert "batchNumber" in data["fields"]
+        assert "fontHeightMm" in data["fields"]
+        assert data["fields"]["fontHeightMm"] is None
+
+
+def test_extract_endpoint_with_calibration(tmp_path, monkeypatch):
+    """POST /extract with calibration_px_per_mm computes fontHeightMm."""
+    image_path = tmp_path / "test_product_calib.jpg"
+    create_dummy_image(image_path)
+
+    class FakePaddleReader:
+        def ocr(self, image, cls=False):
+            return [[[
+                [[10, 20], [200, 20], [200, 60], [10, 60]],  # height = 40px
+                ("Batch No: B12345", np.float32(0.95))
+            ]]]
+
+    monkeypatch.setattr(paddle_ocr, "get_paddle_reader", lambda: FakePaddleReader())
+
+    with TestClient(app) as client:
+        with open(image_path, "rb") as img_file:
+            files = {"file": ("test_product_calib.jpg", img_file, "image/jpeg")}
+            response = client.post("/extract", files=files, data={"calibration_px_per_mm": "10.0"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["fields"]["batchNumber"] == "B12345"
+        # 40px / 10.0 px/mm = 4.0 mm
+        assert data["fields"]["fontHeightMm"] == 4.0
 
 
 def test_extract_endpoint_non_image_file(tmp_path):

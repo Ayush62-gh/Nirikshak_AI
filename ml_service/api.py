@@ -2,9 +2,9 @@ import os
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 import uvicorn
 
 import image_processor
@@ -39,11 +39,14 @@ def health():
 
 
 @app.post("/extract")
-def extract_text_from_image(file: UploadFile = File(...)):
+def extract_text_from_image(
+    file: UploadFile = File(...),
+    calibration_px_per_mm: Optional[float] = Form(None)
+):
     """
     Processes an uploaded product image and returns extracted text and quality info.
     
-    Accepts: multipart/form-data with field named 'file'
+    Accepts: multipart/form-data with field named 'file' and optional 'calibration_px_per_mm'
     """
     filename = file.filename or ""
     file_ext = Path(filename).suffix.lower()
@@ -69,7 +72,10 @@ def extract_text_from_image(file: UploadFile = File(...)):
         temp_file.write(contents)
         temp_file.close()
 
-        result = image_processor.process_product_image(temp_file.name)
+        result = image_processor.process_product_image(
+            temp_file.name,
+            calibration_px_per_mm=calibration_px_per_mm
+        )
 
         if isinstance(result, dict) and result.get("success") is False:
             raise HTTPException(
@@ -77,7 +83,7 @@ def extract_text_from_image(file: UploadFile = File(...)):
                 detail=result.get("message", "Image processing failed.")
             )
 
-        result["fields"] = extract_fields(result)
+        result["fields"] = extract_fields(result, calibration_px_per_mm=calibration_px_per_mm)
 
         return result
 
@@ -99,12 +105,15 @@ def extract_text_from_image(file: UploadFile = File(...)):
 
 
 @app.post("/extract-multi")
-def extract_text_from_multiple_images(files: List[UploadFile] = File(...)):
+def extract_text_from_multiple_images(
+    files: List[UploadFile] = File(...),
+    calibration_px_per_mm: Optional[float] = Form(None)
+):
     """
     Processes multiple uploaded product images (e.g., front, back, side labels)
     and returns merged Metrology fields with consensus & conflict resolution.
     
-    Accepts: multipart/form-data with repeated field named 'files'
+    Accepts: multipart/form-data with repeated field named 'files' and optional 'calibration_px_per_mm'
     """
     if not files:
         raise HTTPException(
@@ -138,7 +147,10 @@ def extract_text_from_multiple_images(files: List[UploadFile] = File(...)):
             temp_file.close()
             temp_paths.append(temp_file.name)
 
-        result = image_processor.process_product_images(temp_paths)
+        result = image_processor.process_product_images(
+            temp_paths,
+            calibration_px_per_mm=calibration_px_per_mm
+        )
 
         if isinstance(result, dict) and result.get("success") is False:
             raise HTTPException(

@@ -22,7 +22,7 @@ def _build_rule_engine_request(extracted_fields: dict) -> dict:
     extracted = extracted_fields if isinstance(extracted_fields, dict) else {}
     product_id = extracted.get("product_id") or str(uuid.uuid4())
 
-    return {
+    req = {
         "productId": product_id,
         "productName": extracted.get("product_name"),
         # productType is not detected by OCR or collected from the user yet; sending
@@ -43,6 +43,10 @@ def _build_rule_engine_request(extracted_fields: dict) -> dict:
         "consumerCare": extracted.get("consumer_care"),
         "countryOfOrigin": extracted.get("country_of_origin"),
     }
+    if extracted.get("font_size_mm") is not None:
+        req["fontSizeMm"] = extracted.get("font_size_mm")
+
+    return req
 
 
 def _parse_rule_engine_response(response: dict) -> dict:

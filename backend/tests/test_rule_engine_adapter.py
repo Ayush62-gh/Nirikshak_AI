@@ -162,3 +162,20 @@ def test_parse_rule_engine_response_manual_review_case():
     parsed = _parse_rule_engine_response(rule_engine_res)
 
     assert parsed["status"] == "PARTIAL"
+
+
+def test_build_rule_engine_request_forwards_font_size_mm():
+    """Verify font_size_mm is forwarded to Rule Engine as fontSizeMm when present, omitted when None."""
+    extracted = {
+        "product_name": "Test Biscuits",
+        "font_size_mm": 3.0,
+    }
+    req = _build_rule_engine_request(extracted)
+    assert req["fontSizeMm"] == 3.0
+
+    extracted_none = {
+        "product_name": "Test Biscuits",
+        "font_size_mm": None,
+    }
+    req_none = _build_rule_engine_request(extracted_none)
+    assert "fontSizeMm" not in req_none

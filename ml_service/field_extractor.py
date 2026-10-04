@@ -1,3 +1,4 @@
+import math
 import re
 from difflib import SequenceMatcher
 
@@ -1803,23 +1804,227 @@ def _extract_unit_sale_price(text_blocks, full_text):
 
 
 # ---------------------------------------------------------------------------
+# Batch Number Extraction
+# ---------------------------------------------------------------------------
+
+_BATCH_LABEL_RE = re.compile(
+    r'(?i)\b(?:'
+    r'for\s+batch(?:\s+no\.?|\s+number)?|'
+    r'batch(?:\s*/\s*lot)?(?:\s+no\.?|\s+number)?|'
+    r'lot(?:\s*/\s*batch)?(?:\s+no\.?|\s+number)?|'
+    r'b\.?\s*no\.?'
+    r')\s*[:.\-–—]*\s*',
+)
+
+_BATCH_TRAILING_STOP_RE = re.compile(
+    r'(?i)(?:'
+    r'\s+(?:mfg|mfd|manufactur[a-z]*|pkd|pack[a-z]*|exp(?:ir[a-z]*)?|best\s+before|use\s+(?:by|before)|bbe|mrp|rs\.?|inr|₹|net\s*(?:qty|quantity|wt|weight|vol|volume|content)|unit\s+sale|usp|fssai|lic\.?\s*no|licen[cs]e|date|dom|dop)\b'
+    r'|\s+\d{1,2}[/\.-]\d{2,4}\b'
+    r'|\s+(?:see\b|refer\b|read\b|below\b|above\b)'
+    r')'
+)
+
+_BATCH_INSTRUCTION_RE = re.compile(
+    r'(?i)^\s*(?:'
+    r'see\b|refer\b|read\b|printed\b|check\b|on\s+crimp|on\s+cap|on\s+neck|on\s+pack|on\s+bottle|'
+    r'at\s+bottom|below\b|above\b|for\s+mfg|read\s+first\s+character'
+    r')'
+)
+
+_BATCH_PURE_DATE_RE = re.compile(
+    r'^(?:[0-3]?\d[/\.-])?[0-1]?\d[/\.-](?:20\d{2}|\d{2})$'
+)
+
+_BATCH_PURE_PRICE_RE = re.compile(
+    r'^(?:rs\.?|inr|₹)?\s*\d+(?:\.\d{1,2})?(?:/-)?$',
+    re.IGNORECASE
+)
+
+_BATCH_PURE_QTY_RE = re.compile(
+    r'^\d+(?:\.\d+)?\s*(?:g|gm|gms|kg|ml|l|ltr|n|u|piece|count)$',
+    re.IGNORECASE
+)
+
+
+def _clean_batch_candidate(val_str):
+    if not val_str or not isinstance(val_str, str):
+        return None
+    m_stop = _BATCH_TRAILING_STOP_RE.search(val_str)
+    if m_stop:
+        val_str = val_str[:m_stop.start()]
+
+    cleaned = val_str.strip(" :.,-–—#/\\")
+    if not cleaned or len(cleaned) < 2 or len(cleaned) > 50:
+        return None
+
+    # Reject instruction text (e.g. "See Below", "Refer Crimp")
+    if _BATCH_INSTRUCTION_RE.search(cleaned):
+        return None
+
+    # Reject pure date (e.g. "03/2026", "27/02/2026")
+    if _BATCH_PURE_DATE_RE.match(cleaned):
+        return None
+
+    # Reject pure price (e.g. "Rs 50", "50.00")
+    if _BATCH_PURE_PRICE_RE.match(cleaned):
+        return None
+
+    # Reject pure quantity (e.g. "200g", "100 ml")
+    if _BATCH_PURE_QTY_RE.match(cleaned):
+        return None
+
+    # Must contain at least one alphanumeric character
+    if not re.search(r'[A-Za-z0-9]', cleaned):
+        return None
+
+    # If fused without space to trailing stop words (e.g. "B12345/Mfg Date")
+    if re.search(r'(?i)\b(?:mfg|mfd|exp|pkd|mrp|fssai)\b', cleaned):
+        parts = re.split(r'(?i)[/,\s]+(?:mfg|mfd|exp|pkd|mrp|fssai)\b', cleaned)
+        if parts and parts[0]:
+            cleaned = parts[0].strip(" :.,-–—#/\\")
+            if not cleaned or len(cleaned) < 2:
+                return None
+        else:
+            return None
+
+    return cleaned
+
+
+def _extract_batch_number(text_blocks, full_text, raw_blocks=None):
+    """
+    Extracts batch / lot number associated with canonical batch declarations
+    (e.g., 'Batch No', 'Batch Number', 'Lot No', 'Batch:', 'B. No:').
+
+    Returns plain string when confidently found, or None when not found/ambiguous.
+    """
+    # 1. Search in individual text blocks for inline batch declaration
+    for block_index, block in enumerate(text_blocks):
+        txt = block.get("text", "").strip()
+        if not txt:
+            continue
+
+        match = _BATCH_LABEL_RE.search(txt)
+        if match:
+            # Check if there is an inline value in the same block
+            after_label = txt[match.end():].strip()
+            if after_label:
+                candidate = _clean_batch_candidate(after_label)
+                if candidate:
+                    return candidate
+
+            # If no inline value in the same block, look at adjacent/nearby blocks
+            for same_row in (True, False):
+                for nearby_index in _label_value_candidates(text_blocks, block_index, max_distance=150, same_row_only=same_row):
+                    nearby_txt = text_blocks[nearby_index].get("text", "").strip()
+                    if not nearby_txt:
+                        continue
+                    if _is_field_label(nearby_txt):
+                        continue
+                    candidate = _clean_batch_candidate(nearby_txt)
+                    if candidate:
+                        return candidate
+
+    # 2. Fallback: Search full_text line by line
+    for line in full_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = _BATCH_LABEL_RE.search(line)
+        if match:
+            after_label = line[match.end():].strip()
+            if after_label:
+                candidate = _clean_batch_candidate(after_label)
+                if candidate:
+                    return candidate
+
+    # 3. Fallback: Search anywhere in full_text
+    match = _BATCH_LABEL_RE.search(full_text)
+    if match:
+        after_label = full_text[match.end():].strip()
+        if after_label:
+            candidate = _clean_batch_candidate(after_label)
+            if candidate:
+                return candidate
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Rule 12 — Font Height (mm)
 # ---------------------------------------------------------------------------
-# PaddleOCR provides bounding-box pixel dimensions.  Converting pixels → mm
-# requires a known physical calibration reference (e.g., printed scale bar or
-# a known-dimension element on the label).  No such calibration mechanism
-# exists in this project; therefore we must never invent a mm value.
-#
-# The function below exposes the raw pixel bounding-box height for the tallest
-# text block so that a future calibrated implementation can use it.  The public
-# facing field is always None until calibration is available.
+# PaddleOCR provides bounding-box pixel dimensions. Converting pixels → mm
+# requires a known physical calibration reference (pixels-per-mm).
+# When calibration is unavailable or invalid, fontHeightMm is always None.
 # ---------------------------------------------------------------------------
+
+_STATUTORY_DECLARATION_RE = re.compile(
+    r'(?i)\b(?:'
+    # MRP
+    r'mrp|maximum\s+retail\s+price|max\s+retail\s+price|retail\s+price|'
+    r'incl(?:usive)?\s+of\s+all\s+taxes|'
+    # Net Quantity
+    r'net\s*(?:qty|quantity|wt|weight|vol|volume|content|contents)|'
+    r'number\s+of\s+units\s*\(\s*quantity\s*\)|'
+    # Manufacturer / Packer / Marketer / Importer
+    r'manufactured\s+(?:by|for|in)|mfd[./\s]*(?:by|for|pack|pkd)|mfg[./\s]*(?:by|for|pack|pkd|unit)|'
+    r'manufacturer(?:\s+name)?|made\s+in|produced\s+by|factory\s+address|'
+    r'marketed\s+(?:by|for|in)|mkd[./\s]*by|marketer|'
+    r'packed\s+(?:by|for|in)|pkd[./\s]*by|packer|'
+    r'imported\s+(?:by|for|in)|importer(?:\s+name)?|imp[./\s]*by|'
+    r'reg(?:istered|d)?\.?\s+(?:office|address)|corp(?:orate)?\.?\s+office|'
+    # Dates
+    r'(?:month\s+and\s+year\s+of\s+)?(?:manufacture|mfg|mfd)\b|'
+    r'(?:month\s+and\s+year\s+of\s+)?(?:packing|pkd|packaging)\b|'
+    r'packed\s+on|date\s+of\s+(?:manufacture|packing|packaging|expiry)|'
+    # Expiry
+    r'expiry(?:\s+date)?|exp[./\s]*(?:date)?|use\s+(?:by|before)|best\s+before|'
+    # Batch / Lot
+    r'for\s+batch\s+no|batch(?:\s+no|\s+number)?|lot(?:\s+no|\s+number)?|b\.?\s*no\.?|'
+    # Consumer Care
+    r'consumer\s+care|customer\s+care|care\s+cell|consumer\s+complaints|customer\s+complaints|'
+    r'toll\s*free|helpline|contact\s+us|'
+    # Country of Origin
+    r'country\s+o[fi]\s+origin|'
+    # Unit Sale Price
+    r'unit\s+sale\s+price|usp\b'
+    r')\b'
+)
+
+_EXCLUDE_NON_STATUTORY_RE = re.compile(
+    r'(?i)\b(?:'
+    r'product\s+name|generic\s+name|commodity\s+name|'
+    r'steps\s+for|how\s+to\s+use|directions\s+for\s+use|warning|caution|'
+    r'paraben\s*free|dermatologically|hypoallergenic|skin\s+compatibility'
+    r')\b'
+)
+
+
+def _is_statutory_declaration_block(block):
+    """
+    Identifies whether an OCR text block corresponds to a mandatory packaged-commodity
+    statutory declaration (MRP, Net Qty, Mfg/Packer/Importer, Dates, Expiry, Batch,
+    Consumer Care, Country of Origin, USP, Registered Address).
+
+    Explicitly excludes product name, brand/logo text, decorative marketing claims,
+    and arbitrary code noise.
+    """
+    text = block.get("text", "").strip()
+    if len(text) < 3:
+        return False
+    # Must contain at least one alphabetic character (reject pure numbers/barcodes)
+    if not any(c.isalpha() for c in text):
+        return False
+    # Exclude explicit non-statutory categories (product name, routine claims)
+    if _EXCLUDE_NON_STATUTORY_RE.search(text):
+        return False
+    return bool(_STATUTORY_DECLARATION_RE.search(text))
 
 
 def _extract_font_height_mm(text_blocks, calibration_px_per_mm=None):
     """
-    Returns physical font height in millimetres, or None if calibration is
-    unavailable.
+    Returns physical font height in millimetres of the smallest relevant
+    mandatory/statutory declaration block, or None if calibration is
+    unavailable, non-positive, or invalid, or if no statutory blocks are found.
 
     Parameters
     ----------
@@ -1832,29 +2037,33 @@ def _extract_font_height_mm(text_blocks, calibration_px_per_mm=None):
     Returns
     -------
     float or None
-        Physical font height in mm, or None when calibration is unavailable.
+        Physical font height in mm, or None when calibration is unavailable or invalid.
     """
     if calibration_px_per_mm is None:
-        # No calibration → cannot compute physical dimensions.
-        # Expose the raw pixel height as metadata only (internal use).
-        pixel_heights = []
-        for block in text_blocks:
-            m = _box_metrics(block)
-            if m:
-                pixel_heights.append(m[3] - m[1])  # max_y − min_y
-        # Return None regardless; caller should not use pixel value as mm.
         return None
 
-    # Calibrated path (for future use)
-    pixel_heights = []
+    try:
+        calib = float(calibration_px_per_mm)
+        if calib <= 0 or not math.isfinite(calib):
+            return None
+    except (ValueError, TypeError):
+        return None
+
+    statutory_heights = []
     for block in text_blocks:
+        if not _is_statutory_declaration_block(block):
+            continue
         m = _box_metrics(block)
         if m:
-            pixel_heights.append(m[3] - m[1])
-    if not pixel_heights:
+            height_px = m[3] - m[1]  # max_y - min_y
+            if height_px > 0:
+                statutory_heights.append(height_px)
+
+    if not statutory_heights:
         return None
-    max_pixel_height = max(pixel_heights)
-    return round(max_pixel_height / calibration_px_per_mm, 2)
+
+    min_pixel_height = min(statutory_heights)
+    return round(min_pixel_height / calib, 2)
 
 
 def _extract_product_name(text_blocks, full_text, known_extracted):
@@ -2096,7 +2305,7 @@ def _extract_product_name(text_blocks, full_text, known_extracted):
     return None
 
 
-def extract_fields(ocr_result: dict) -> dict:
+def extract_fields(ocr_result: dict, calibration_px_per_mm: float = None) -> dict:
     """
     Converts raw OCR output dictionary into structured fields matching the rule engine contract.
 
@@ -2105,8 +2314,8 @@ def extract_fields(ocr_result: dict) -> dict:
       - full_text: str
       - text_blocks: list of dicts with 'text', 'confidence', 'box'
 
-    Returns a dict covering Rules 1–12 extraction fields.
-    Rule 12 (fontHeightMm) is always None until calibration_px_per_mm is available.
+    Returns a dict covering Rules 1–12 extraction fields + batchNumber.
+    Rule 12 (fontHeightMm) is None unless a valid positive calibration_px_per_mm is supplied.
     """
     if not isinstance(ocr_result, dict):
         ocr_result = {}
@@ -2148,8 +2357,11 @@ def extract_fields(ocr_result: dict) -> dict:
     importer_name = _extract_importer(filtered_text_blocks, filtered_full_text)           # Rule 9
     unit_sale_price = _extract_unit_sale_price(filtered_text_blocks, filtered_full_text)  # Rule 11
 
-    # Rule 12: font height mm — always None without calibration reference.
-    font_height_mm = _extract_font_height_mm(filtered_text_blocks, calibration_px_per_mm=None)
+    # Rule 12: font height mm — requires physical calibration reference.
+    font_height_mm = _extract_font_height_mm(filtered_text_blocks, calibration_px_per_mm=calibration_px_per_mm)
+
+    # Batch Number Extraction
+    batch_number = _extract_batch_number(filtered_text_blocks, filtered_full_text, raw_blocks=text_blocks)
 
     known_values = [mrp, net_qty, mfg_name, mfg_addr, care_info]
     product_name = _extract_product_name(filtered_text_blocks, filtered_full_text, known_values)
@@ -2215,5 +2427,6 @@ def extract_fields(ocr_result: dict) -> dict:
         "consumerCare": care_info,
         "countryOfOrigin": country_of_origin,
         "fontHeightMm": font_height_mm,           # Rule 12 — always None without calibration
+        "batchNumber": batch_number,
         "extraction_confidence": confidence_flag
     }

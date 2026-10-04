@@ -154,6 +154,22 @@ def _score_candidate_evidence(field_key, value, text_blocks, full_text):
             return 3
         return 2
 
+    elif field_key == "batchNumber":
+        has_batch_label = bool(
+            re.search(
+                r'(?i)\b(?:for\s+batch(?:\s+no\.?|\s+number)?|batch(?:\s*/\s*lot)?(?:\s+no\.?|\s+number)?|lot(?:\s*/\s*batch)?(?:\s+no\.?|\s+number)?|b\.?\s*no)\b',
+                full_lower
+            )
+        )
+        has_alphanumeric = bool(re.search(r'[A-Za-z0-9]', val_str))
+        if not has_alphanumeric or len(val_str) < 2:
+            return 0
+        if has_batch_label and len(val_str) >= 3:
+            return 3
+        if has_batch_label:
+            return 2
+        return 1
+
     elif field_key == "productName":
         # Price/batch/code/date text = invalid (0)
         if re.search(
@@ -253,7 +269,7 @@ def _score_candidate_evidence(field_key, value, text_blocks, full_text):
     return 2
 
 
-def process_product_image(image_path):
+def process_product_image(image_path, calibration_px_per_mm=None):
     """
     Ek product image ka complete OCR pipeline run karta hai.
 
@@ -318,7 +334,7 @@ def process_product_image(image_path):
 
     # Step 4: Fallback Retry Safety Net for ACCEPTABLE / GOOD quality images
     if not is_poor_quality:
-        extracted_fields = extract_fields(ocr_result)
+        extracted_fields = extract_fields(ocr_result, calibration_px_per_mm=calibration_px_per_mm)
         key_missing = (
             extracted_fields.get("mrp") is None
             or extracted_fields.get("netQuantity") is None
@@ -339,7 +355,7 @@ def process_product_image(image_path):
                 )
 
                 if secondary_ocr.get("success"):
-                    secondary_fields = extract_fields(secondary_ocr)
+                    secondary_fields = extract_fields(secondary_ocr, calibration_px_per_mm=calibration_px_per_mm)
                     # Recover missing key fields from preprocessed pass
                     for key_field in ("mrp", "netQuantity", "manufacturerName", "monthOfPacking", "yearOfPacking", "consumerCare"):
                         if extracted_fields.get(key_field) is None and secondary_fields.get(key_field) is not None:
@@ -382,7 +398,7 @@ def process_product_image(image_path):
     }
 
 
-def process_product_images(image_paths):
+def process_product_images(image_paths, calibration_px_per_mm=None):
     """
     Processes multiple images of the same product (e.g. Front, Back, Side)
     and merges extracted Metrology fields with consensus & conflict resolution.
@@ -426,7 +442,8 @@ def process_product_images(image_paths):
 
     for idx, image_path in enumerate(image_paths):
         image_result = process_product_image(
-            image_path
+            image_path,
+            calibration_px_per_mm=calibration_px_per_mm
         )
 
         result_with_path = {
@@ -444,7 +461,7 @@ def process_product_images(image_paths):
                 combined_text_parts.append(full_text)
 
             # Perform structured field extraction on single image result
-            fields = extract_fields(image_result)
+            fields = extract_fields(image_result, calibration_px_per_mm=calibration_px_per_mm)
             text_blocks = image_result.get("text_blocks", [])
             mean_conf = _calculate_mean_confidence(text_blocks)
 
@@ -469,6 +486,7 @@ def process_product_images(image_paths):
         "expiryMonth", "expiryYear",                                              # Rule 10
         "consumerCare", "countryOfOrigin",
         "fontHeightMm",                                                           # Rule 12
+        "batchNumber",
     ]
 
     merged_fields = {}

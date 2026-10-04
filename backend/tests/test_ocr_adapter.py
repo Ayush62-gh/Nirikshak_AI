@@ -108,6 +108,7 @@ def test_parse_ocr_response_new_fields_present():
             "fontHeightMm": 2.5,
             "expiryMonth": "08",
             "expiryYear": "2027",
+            "batchNumber": "B12345",
             "extraction_confidence": "HIGH",
         },
     }
@@ -119,6 +120,7 @@ def test_parse_ocr_response_new_fields_present():
     assert result["unit_sale_price"] == "Rs. 1.25/g"
     assert result["font_size_mm"] == 2.5
     assert result["expiry_date"] == "08/2027"
+    assert result["batch_number"] == "B12345"
 
 
 def test_parse_ocr_response_new_fields_none_when_absent_no_exception():

@@ -14,7 +14,8 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-import { submitScan } from "../services/api";
+// import { submitScan } from "../services/api";
+import { submitScan, submitMultiScan } from "../services/api";
 
 function NewInspection() {
   const [images, setImages] = useState([]);
@@ -75,17 +76,42 @@ useEffect(() => {
   }
 }, [error]);
 
+  // const handleUpload = (e) => {
+  //   const files = Array.from(e.target.files);
+
+  //   const newImages = files.map((file) => ({
+  //     file,
+  //     preview: URL.createObjectURL(file),
+  //     name: file.name,
+  //   }));
+
+  //   setImages((prev) => [...prev, ...newImages]);
+  // };
   const handleUpload = (e) => {
-    const files = Array.from(e.target.files);
+  const files = Array.from(e.target.files);
 
-    const newImages = files.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      name: file.name,
-    }));
+  const invalidFiles = files.filter(
+    (file) => !["image/jpeg", "image/png"].includes(file.type)
+  );
 
-    setImages((prev) => [...prev, ...newImages]);
-  };
+  if (invalidFiles.length > 0) {
+    setError("Only JPEG and PNG images are allowed.");
+    e.target.value = "";
+    return;
+  }
+
+  setError(null);
+
+  const newImages = files.map((file) => ({
+    file,
+    preview: URL.createObjectURL(file),
+    name: file.name,
+  }));
+
+  setImages((prev) => [...prev, ...newImages]);
+
+  e.target.value = "";
+};
   const openCamera = async () => {
   try {
     setError(null);
@@ -181,7 +207,10 @@ const retakePhoto = () => {
     setScanResult(null);
 
     try {
-      const result = await submitScan(images[0].file);
+      const result =
+       images.length === 1
+         ? await submitScan(images[0].file)
+         : await submitMultiScan(images.map((image) => image.file));
       setScanResult(result);
     } catch (err) {
       setError(err.message || "An unexpected error occurred during scan submission.");
@@ -270,7 +299,7 @@ const retakePhoto = () => {
                 <input
                   id="package-upload"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png"
                   multiple
                   onChange={handleUpload}
                   className="hidden"

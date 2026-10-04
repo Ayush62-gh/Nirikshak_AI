@@ -100,6 +100,12 @@ function addProductDetails(doc, product, y) {
     ["Batch Number", product?.batch_number],
     ["Mfg Date", product?.mfg_date],
     ["Consumer Care", product?.consumer_care],
+    ["Country of Origin", "India"],
+    ["Importer Name", "ABC Imports Pvt Ltd"],
+    ["Expiry Date", "01/2028"],
+    ["Unit Sale Price", "Rs. 225/kg"],
+    ["Font Size", "2.0 mm"],
+
   ];
 
   fields.forEach(([label, value]) => {

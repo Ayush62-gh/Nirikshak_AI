@@ -672,16 +672,6 @@ const drawRuleCard = (rule, index) => {
 
   // Download
   doc.save("NIRIKSHAK-Rules-Guidelines.pdf");
-
-  // 🎉 Success effect
-  confetti({
-    particleCount: 120,
-    spread: 70,
-    origin: {
-      x: 0.5,
-      y: 0.7,
-    },
-  });
 };
     const filteredRules = rules
   .filter((rule) => { 

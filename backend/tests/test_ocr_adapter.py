@@ -168,6 +168,30 @@ def test_parse_ocr_response_partial_expiry_dates():
     assert _parse_ocr_response(res_year_only)["expiry_date"] is None
 
 
+def test_parse_ocr_response_batch_number_present():
+    ocr_response = {
+        "fields": {
+            "batchNumber": "B12345",
+        }
+    }
+    result = _parse_ocr_response(ocr_response)
+    assert result["batch_number"] == "B12345"
+
+
+def test_parse_ocr_response_batch_number_absent_is_none_no_exception():
+    ocr_response = {
+        "fields": {
+            "productName": "Product Without Batch",
+        }
+    }
+    result = _parse_ocr_response(ocr_response)
+    assert result["batch_number"] is None
+
+    empty_response = {}
+    result_empty = _parse_ocr_response(empty_response)
+    assert result_empty["batch_number"] is None
+
+
 @pytest.mark.anyio
 async def test_extract_fields_low_confidence_does_not_raise(monkeypatch, caplog):
     low_conf_ocr_response = {

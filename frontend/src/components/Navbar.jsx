@@ -98,7 +98,7 @@ function Navbar() {
   <header
     className={
       isDashboard
-        ? "flex min-h-24 items-center justify-between border-b border-[#E2E8F0] bg-white px-8"
+        ? "flex min-h-24 items-center justify-between border-b border-[#E2E8F0] bg-[#F1FAF8] px-8"
         : "relative h-0"
     }
   >

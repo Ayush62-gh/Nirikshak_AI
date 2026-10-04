@@ -16,8 +16,15 @@ function LoginBrandPanel() {
 
         <div className="flex items-center gap-3">
 
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#12988d] text-white shadow-sm">
+          {/* <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#12988d] text-white shadow-sm">
             <ShieldCheck size={24} />
+          </div> */}
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl">
+          <img
+            src="/nirikshak-icon-2.png"
+            alt="NIRIKSHAK"
+            className="h-full w-full object-contain"
+          />
           </div>
 
           <div>

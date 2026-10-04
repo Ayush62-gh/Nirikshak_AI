@@ -164,13 +164,28 @@ function addViolations(doc, violations, y) {
   return y;
 }
 
-export function generateComplianceReportPDF(scanData, inspectorInfo = {}) {
+export async function generateComplianceReportPDF(scanData, inspectorInfo = {}) {
   if (!scanData) {
     throw new Error("Scan data is required to generate the report.");
   }
 
   const doc = new jsPDF();
+  const logo = new Image();
+logo.src = "/nirikshak-icon-2.png";
 
+let logoLoaded = false;
+
+await new Promise((resolve) => {
+  logo.onload = () => {
+    logoLoaded = true;
+    resolve();
+  };
+
+  logo.onerror = () => {
+    console.warn("NIRIKSHAK logo could not be loaded.");
+    resolve();
+  };
+});
   const product = scanData.product || {};
   const compliance = scanData.compliance || {};
   const violations = compliance.violations || [];
@@ -178,36 +193,55 @@ export function generateComplianceReportPDF(scanData, inspectorInfo = {}) {
   let y = MARGIN;
 
   // Header
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(15, 23, 42);
+if (logoLoaded) {
+  doc.addImage(logo, "PNG", MARGIN, y - 7, 18, 18);
+}
 
-  const titleLines = doc.splitTextToSize(
-    "Legal Metrology Compliance Inspection Report",
-    CONTENT_WIDTH
-  );
+// NIRIKSHAK
+doc.setFont("helvetica", "bold");
+doc.setFontSize(17);
+doc.setTextColor(15, 118, 110);
+doc.text("NIRIKSHAK", MARGIN + 23, y + 1);
 
-  doc.text(titleLines, MARGIN, y);
+// Tagline
+doc.setFont("helvetica", "normal");
+doc.setFontSize(8);
+doc.setTextColor(100, 116, 139);
+doc.text("Smart Compliance. Fair Trade.", MARGIN + 23, y + 7);
 
-  y += titleLines.length * 8 + 5;
+y += 20;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
+// Report title
+doc.setFont("helvetica", "bold");
+doc.setFontSize(17);
+doc.setTextColor(30, 41, 59);
 
-  doc.text(`Scan ID: ${formatValue(scanData.scan_id)}`, MARGIN, y);
-  y += 5;
+const titleLines = doc.splitTextToSize(
+  "Legal Metrology Compliance Inspection Report",
+  CONTENT_WIDTH
+);
 
-  doc.text(
-    `Inspection Date: ${formatDate(scanData.timestamp)}`,
-    MARGIN,
-    y
-  );
+doc.text(titleLines, MARGIN, y);
 
-  y += 12;
+y += titleLines.length * 8 + 5;
 
-  // Inspector section
-  y = addSectionTitle(doc, "Inspector Information", y);
+doc.setFont("helvetica", "normal");
+doc.setFontSize(9);
+doc.setTextColor(100, 116, 139);
+
+doc.text(`Scan ID: ${formatValue(scanData.scan_id)}`, MARGIN, y);
+y += 5;
+
+doc.text(
+  `Inspection Date: ${formatDate(scanData.timestamp)}`,
+  MARGIN,
+  y
+);
+
+y += 12;
+
+// Inspector section
+y = addSectionTitle(doc, "Inspector Information", y);
 
   y = addLabelValue(
     doc,
@@ -289,4 +323,275 @@ export function generateComplianceReportPDF(scanData, inspectorInfo = {}) {
   );
 
   doc.save(`Nirikshak-Compliance-Report-${scanId}.pdf`);
+}
+export async function generateAnalyticsReportPDF(scans = []) {
+  if (!scans || scans.length === 0) {
+    throw new Error("No inspection data available to generate the analytics report.");
+  }
+
+  const doc = new jsPDF();
+  const logo = new Image();
+logo.src = "/nirikshak-icon-2.png";
+
+let logoLoaded = false;
+
+await new Promise((resolve) => {
+  logo.onload = () => {
+    logoLoaded = true;
+    resolve();
+  };
+
+  logo.onerror = () => {
+    console.warn("NIRIKSHAK logo could not be loaded.");
+    resolve();
+  };
+});
+
+  const total = scans.length;
+
+  const passedCount = scans.filter(
+    (scan) => scan.compliance?.status === "COMPLIANT"
+  ).length;
+
+  const warningCount = scans.filter(
+    (scan) => scan.compliance?.status === "PARTIAL"
+  ).length;
+
+  const failedCount = scans.filter(
+    (scan) => scan.compliance?.status === "NON_COMPLIANT"
+  ).length;
+
+  const calculateScore = (scan) => {
+    const status = scan.compliance?.status;
+    const violations = scan.compliance?.violations?.length || 0;
+
+    if (status === "COMPLIANT") return 100;
+    if (status === "NON_COMPLIANT") {
+      return Math.max(10, 100 - violations * 25);
+    }
+
+    return Math.max(30, 100 - violations * 15);
+  };
+
+  const averageScore =
+    scans.length > 0
+      ? (
+          scans.reduce((sum, scan) => sum + calculateScore(scan), 0) /
+          scans.length
+        ).toFixed(1)
+      : "0.0";
+
+  const passedPct = ((passedCount / total) * 100).toFixed(1);
+  const warningPct = ((warningCount / total) * 100).toFixed(1);
+  const failedPct = ((failedCount / total) * 100).toFixed(1);
+
+  let y = MARGIN;
+
+  // Header
+if (logoLoaded) {
+  doc.addImage(logo, "PNG", MARGIN, y - 7, 18, 18);
+}
+
+// NIRIKSHAK
+doc.setFont("helvetica", "bold");
+doc.setFontSize(17);
+doc.setTextColor(15, 118, 110);
+doc.text("NIRIKSHAK", MARGIN + 23, y + 1);
+
+// Tagline
+doc.setFont("helvetica", "normal");
+doc.setFontSize(8);
+doc.setTextColor(100, 116, 139);
+doc.text("Smart Compliance. Fair Trade.", MARGIN + 23, y + 7);
+
+y += 20;
+
+// Report title
+doc.setFont("helvetica", "bold");
+doc.setFontSize(17);
+doc.setTextColor(30, 41, 59);
+
+doc.text("Compliance Analytics Report", MARGIN, y);
+
+y += 7;
+
+// Generated date
+doc.setFont("helvetica", "normal");
+doc.setFontSize(9);
+doc.setTextColor(100, 116, 139);
+
+doc.text(
+  `Generated: ${new Date().toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })}`,
+  MARGIN,
+  y
+);
+
+y += 15;
+
+// Summary section
+y = addSectionTitle(doc, "Inspection Summary", y);
+
+  const cards = [
+    ["Total Inspections", total, [40, 120, 150]],
+    ["Passed", passedCount, [22, 163, 74]],
+    ["Warnings", warningCount, [217, 119, 6]],
+    ["Failed", failedCount, [220, 38, 38]],
+  ];
+
+  const cardWidth = (CONTENT_WIDTH - 9) / 4;
+  const cardHeight = 25;
+
+  cards.forEach(([label, value, color], index) => {
+    const x = MARGIN + index * (cardWidth + 3);
+
+    doc.setFillColor(241, 250, 248);
+    doc.roundedRect(x, y, cardWidth, cardHeight, 3, 3, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(...color);
+
+    doc.text(String(value), x + 5, y + 11);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(label, x + 5, y + 19);
+  });
+
+  y += 36;
+
+  // Average compliance
+  y = addSectionTitle(doc, "Overall Compliance Score", y);
+
+  doc.setFillColor(241, 250, 248);
+  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 22, 4, 4, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(15, 118, 110);
+
+  doc.text(`${averageScore}%`, MARGIN + 8, y + 14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+
+  doc.text("Average compliance score across recorded inspections", MARGIN + 38, y + 13);
+
+  y += 32;
+
+  // Status breakdown
+  y = addSectionTitle(doc, "Compliance Status Breakdown", y);
+
+  const breakdown = [
+    ["Passed", passedCount, passedPct, [15, 118, 110]],
+    ["Warnings", warningCount, warningPct, [217, 119, 6]],
+    ["Failed", failedCount, failedPct, [220, 38, 38]],
+  ];
+
+  breakdown.forEach(([label, count, percentage, color]) => {
+    y = checkPageSpace(doc, y, 15);
+
+    doc.setFillColor(...color);
+    doc.roundedRect(MARGIN, y - 5, 4, 10, 1, 1, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(51, 65, 85);
+
+    doc.text(label, MARGIN + 9, y + 1);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(`${count} inspections`, MARGIN + 60, y + 1);
+    doc.text(`${percentage}%`, PAGE_WIDTH - MARGIN, y + 1, {
+      align: "right",
+    });
+
+    y += 12;
+  });
+
+  y += 5;
+
+  // Top non-compliant products
+  y = addSectionTitle(doc, "Top Non-Compliant Products", y);
+
+  const productMap = {};
+
+  scans.forEach((scan) => {
+    if (scan.compliance?.status === "COMPLIANT") return;
+
+    const productName =
+      scan.product?.product_name ||
+      scan.extracted_fields?.product_name ||
+      "Unidentified Product";
+
+    const violations = scan.compliance?.violations?.length || 1;
+
+    if (!productMap[productName]) {
+      productMap[productName] = 0;
+    }
+
+    productMap[productName] += violations;
+  });
+
+  const topProducts = Object.entries(productMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  if (topProducts.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text("No non-compliant products detected.", MARGIN, y);
+    y += 12;
+  } else {
+    topProducts.forEach(([name, violations], index) => {
+      y = checkPageSpace(doc, y, 14);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(51, 65, 85);
+
+      doc.text(`${index + 1}.`, MARGIN, y);
+
+      doc.setFont("helvetica", "normal");
+
+      const nameLines = doc.splitTextToSize(name, CONTENT_WIDTH - 45);
+
+      doc.text(nameLines, MARGIN + 8, y);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(220, 38, 38);
+
+      doc.text(
+        `${violations} violations`,
+        PAGE_WIDTH - MARGIN,
+        y,
+        { align: "right" }
+      );
+
+      y += Math.max(8, nameLines.length * 5);
+    });
+  }
+
+  // Footer
+  const totalPages = doc.getNumberOfPages();
+
+  for (let page = 1; page <= totalPages; page++) {
+    doc.setPage(page);
+    addFooter(doc, page);
+  }
+
+  doc.save(
+    `Nirikshak-Compliance-Analytics-${new Date()
+      .toISOString()
+      .slice(0, 10)}.pdf`
+  );
 }

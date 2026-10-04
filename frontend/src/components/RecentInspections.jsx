@@ -46,7 +46,7 @@ function RecentInspections({ scans = [], loading = false, error = null }) {
   const navigate = useNavigate();
 
   return (
-    <div className="min-w-0 rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+    <div className="min-w-0 rounded-2xl border border-[#E2E8F0] bg-[#F1FAF8] p-5 shadow-sm">
 
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">

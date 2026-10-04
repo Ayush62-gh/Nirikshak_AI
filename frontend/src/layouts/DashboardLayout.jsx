@@ -7,7 +7,7 @@ function DashboardLayout({ children }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#F8FAFC]">
+    <div className="h-screen overflow-hidden bg-[#E3F5F2]">
       <Sidebar
         isMobileOpen={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
@@ -21,7 +21,8 @@ function DashboardLayout({ children }) {
         />
       )}
 
-      <main className="min-w-0 h-screen overflow-y-auto md:ml-64">
+      {/* <main className="min-w-0 h-screen overflow-y-auto md:ml-64"> */}
+      <main className="scrollbar-hide min-w-0 h-screen overflow-y-auto md:ml-64">
         {/* Mobile Header */}
         <div className="sticky top-0 z-30 flex h-14 items-center border-b border-[#E2E8F0] bg-white px-4 md:hidden">
           <button

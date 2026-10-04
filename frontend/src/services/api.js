@@ -241,3 +241,42 @@ export async function getScanById(scanId) {
     throw error;
   }
 }
+
+/**
+ * Submit multiple image files for compliance scan.
+ * POST /api/scan/multi
+ */
+export async function submitMultiScan(imageFiles) {
+  const formData = new FormData();
+
+  imageFiles.forEach((file) => {
+    formData.append("images", file);
+  });
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/scan/multi`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorMsg = await handleResponseError(
+        response,
+        `Multi-image scan submission failed (${response.status})`
+      );
+      throw new Error(errorMsg);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error(
+        "Unable to connect to the backend server. Please check if the API service is running."
+      );
+    }
+    throw error;
+  }
+}

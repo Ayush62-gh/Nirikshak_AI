@@ -28,6 +28,9 @@ const [capturedImage, setCapturedImage] = useState(null);
 
 const videoRef = useRef(null);
 const canvasRef = useRef(null);
+const uploadedImagesRef = useRef(null);
+const resultRef = useRef(null);
+const errorRef = useRef(null);
 
   useEffect(() => {
   return () => {
@@ -41,6 +44,36 @@ useEffect(() => {
     videoRef.current.srcObject = cameraStream;
   }
 }, [cameraOpen, cameraStream, capturedImage]);
+useEffect(() => {
+  if (images.length > 0) {
+    setTimeout(() => {
+      uploadedImagesRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
+}, [images.length]);
+useEffect(() => {
+  if (scanResult) {
+    setTimeout(() => {
+      resultRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
+}, [scanResult]);
+useEffect(() => {
+  if (error) {
+    setTimeout(() => {
+      errorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
+}, [error]);
 
   const handleUpload = (e) => {
     const files = Array.from(e.target.files);
@@ -158,7 +191,7 @@ const retakePhoto = () => {
   };
 
   return (
-    <div className="min-h-full bg-[#F6F9FC] px-8 pt-8 pb-8">
+    <div className="min-h-full bg-[#E3F5F2] px-8 pt-8 pb-8">
 
       {/* Page Heading */}
       <div className="mb-5">
@@ -175,7 +208,7 @@ const retakePhoto = () => {
 
         {/* LEFT */}
         <div>
-          <div className="rounded-2xl border border-[#DDE6F0] bg-white p-7 shadow-sm">
+          <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-7 shadow-sm">
 
             <h2 className="text-xl font-bold text-[#142B4A]">
               1. Capture or Upload Image
@@ -254,7 +287,8 @@ const retakePhoto = () => {
             </div>
 
             {/* Uploaded Images */}
-            <div>
+            {/* <div> */}
+            <div ref={uploadedImagesRef}>
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-[#142B4A]">
@@ -350,7 +384,9 @@ const retakePhoto = () => {
 
           {/* Error Display Banner */}
           {error && (
-            <div className="mt-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-5 text-red-800 shadow-sm">
+            <div 
+            ref={errorRef}
+            className="mt-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-5 text-red-800 shadow-sm">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
               <div className="flex-1">
                 <h4 className="font-bold text-red-900">Inspection Failed</h4>
@@ -361,7 +397,9 @@ const retakePhoto = () => {
 
           {/* Compliance Results Section */}
           {scanResult && (
-            <div className="mt-6 rounded-2xl border border-[#DDE6F0] bg-white p-7 shadow-sm">
+            <div 
+             ref={resultRef}
+            className="mt-6 rounded-2xl border border-[#DDE6F0] bg-white p-7 shadow-sm">
               {/* Header */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#DDE6F0] pb-5">
                 <div>
@@ -515,7 +553,7 @@ const retakePhoto = () => {
         <div className="space-y-5">
 
           {/* Tips */}
-          <div className="rounded-2xl border border-[#DDE6F0] bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-6 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F8F5] text-[#0F8F83]">
                 <Lightbulb size={21} />
@@ -549,7 +587,7 @@ const retakePhoto = () => {
           </div>
 
           {/* Formats */}
-          <div className="rounded-2xl border border-[#DDE6F0] bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-[#DDE6F0] bg-[#F1FAF8] p-6 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E5F0FF] text-[#2878D7]">
                 <FileText size={20} />
@@ -561,7 +599,7 @@ const retakePhoto = () => {
             </div>
 
             <p className="mt-5 text-sm text-[#526982]">
-              JPG, JPEG, PNG, WEBP
+              JPG, JPEG, PNG
             </p>
 
             <p className="mt-2 text-sm text-[#526982]">

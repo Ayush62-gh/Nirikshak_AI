@@ -21,7 +21,6 @@ WORKDIR /app
 
 # Copy requirements and install Python packages first to leverage Docker layer caching
 # setuptools is required by paddle's C++ extension loader at import time (see requirements.txt).
-# torchvision and easyocr are NOT included.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

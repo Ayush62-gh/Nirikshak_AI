@@ -47,7 +47,7 @@ function StatCard({
 
   return (
     <div
-      className={`rounded-2xl border ${theme.border} bg-white p-5 shadow-sm`}
+      className={`rounded-2xl border ${theme.border} bg-[#F1FAF8] p-5 shadow-sm`}
     >
       <div className="flex items-center gap-4">
         

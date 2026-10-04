@@ -56,7 +56,7 @@ function Dashboard() {
   const reviewPct = total > 0 ? ((reviewCount / scans.length) * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
 
       {/* Error Alert */}
       {error && (
@@ -79,7 +79,7 @@ function Dashboard() {
       )}
 
       {/* Statistics */}
-      <div className="grid grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 md:gap-5">
 
         <StatCard
           type="total"
@@ -110,31 +110,13 @@ function Dashboard() {
         />
 
       </div>
-
-      {/* New Inspection & Recent Inspections */}
-      {/* <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-
-        <div
-          onClick={() => navigate("/new-inspection")}
-          className="cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
-        >
-          <UploadBox />
-        </div>
-
-        <RecentInspections
-          scans={scans.slice(0, 5)}
-          loading={loading}
-          error={error}
-        />
-
-      </div> */}
       {/* New Inspection & Recent Inspections */}
         <div className="mt-6 space-y-6">
 
           {/* Start New Inspection */}
         <div
         onClick={() => navigate("/new-inspection")}
-        className="group flex cursor-pointer items-center justify-between rounded-2xl border border-[#D9E5EE] bg-white px-7 py-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0F766E]/40 hover:shadow-md"
+        className="group flex cursor-pointer items-center justify-between rounded-2xl border border-[#D9E5EE] bg-[#F1FAF8] px-7 py-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0F766E]/40 hover:shadow-md"
         >
         <div className="flex items-center gap-5">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F0FDFA] text-[#0F766E]">

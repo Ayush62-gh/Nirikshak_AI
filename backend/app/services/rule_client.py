@@ -2,11 +2,11 @@ import uuid
 import asyncio
 import httpx
 from app.core.config import settings
-from app.core.errors import ExternalServiceError
+from app.core.errors import ExternalServiceError, ExternalServiceRateLimitError
 
 
 def _build_rule_engine_request(extracted_fields: dict) -> dict:
-    mfg_date_str = extracted_fields.get("mfg_date")
+    mfg_date_str = extracted_fields.get("mfg_date") if isinstance(extracted_fields, dict) else None
     month_of_packing = None
     year_of_packing = None
 
@@ -19,31 +19,35 @@ def _build_rule_engine_request(extracted_fields: dict) -> dict:
             elif len(p1) == 4 and len(p2) == 2:  # YYYY/MM
                 month_of_packing, year_of_packing = p2, p1
 
-    product_id = extracted_fields.get("product_id") or str(uuid.uuid4())
+    extracted = extracted_fields if isinstance(extracted_fields, dict) else {}
+    product_id = extracted.get("product_id") or str(uuid.uuid4())
 
     return {
         "productId": product_id,
-        "productName": extracted_fields.get("product_name"),
+        "productName": extracted.get("product_name"),
         # TODO: Should eventually come from OCR or user input; hardcoded "food" for MVP
         "productType": "food",
         # TODO: Should eventually be detected/provided; hardcoded False for MVP
         "isImported": False,
-        "manufacturerName": extracted_fields.get("manufacturer"),
-        "manufacturerAddress": extracted_fields.get("manufacturer_address"),
+        "manufacturerName": extracted.get("manufacturer"),
+        "manufacturerAddress": extracted.get("manufacturer_address"),
         "packerName": None,
         "importerName": None,
-        "netQuantity": extracted_fields.get("net_quantity"),
-        "mrp": extracted_fields.get("mrp"),
+        "netQuantity": extracted.get("net_quantity"),
+        "mrp": extracted.get("mrp"),
         "monthOfPacking": month_of_packing,
         "yearOfPacking": year_of_packing,
-        "consumerCare": extracted_fields.get("consumer_care"),
+        "consumerCare": extracted.get("consumer_care"),
         # TODO: Hardcoded assumption for MVP, should come from OCR/detection eventually
         "countryOfOrigin": "India",
     }
 
 
 def _parse_rule_engine_response(response: dict) -> dict:
-    overall_status = response.get("overallStatus", "").upper()
+    if not isinstance(response, dict):
+        raise ExternalServiceError("Rule Engine returned non-dict response format.")
+
+    overall_status = str(response.get("overallStatus", "")).upper()
     status_map = {
         "PASS": "COMPLIANT",
         "FAIL": "NON_COMPLIANT",
@@ -52,19 +56,24 @@ def _parse_rule_engine_response(response: dict) -> dict:
     internal_status = status_map.get(overall_status, "PARTIAL")
 
     raw_violations = response.get("violations", [])
+    if not isinstance(raw_violations, list):
+        raw_violations = []
+
     violations = []
     for v in raw_violations:
+        if not isinstance(v, dict):
+            continue
         rule_name = v.get("ruleName") or v.get("ruleId") or "RULE_CHECK"
         message = v.get("message") or v.get("description") or ""
         remediation = v.get("remediation")
         if remediation:
-            clean_message = message.rstrip(" .")
+            clean_message = str(message).rstrip(" .")
             message = f"{clean_message}. Suggested fix: {remediation}" if clean_message else f"Suggested fix: {remediation}"
 
         violations.append({
-            "rule": rule_name,
-            "description": message,
-            "field": v.get("field") or "label",
+            "rule": str(rule_name),
+            "description": str(message),
+            "field": str(v.get("field") or "label"),
         })
 
     return {
@@ -98,11 +107,22 @@ async def validate_compliance(extracted_fields: dict) -> dict:
     payload = _build_rule_engine_request(extracted_fields)
     endpoint_url = f"{settings.RULE_ENGINE_URL.rstrip('/')}/api/v1/compliance/check"
 
+    timeout = httpx.Timeout(30.0, connect=5.0)
+
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             res = await client.post(endpoint_url, json=payload)
+            if res.status_code == 429:
+                retry_after = res.headers.get("Retry-After")
+                raise ExternalServiceRateLimitError(
+                    detail="Rule Engine service rate limit exceeded",
+                    retry_after=retry_after
+                )
             res.raise_for_status()
             data = res.json()
             return _parse_rule_engine_response(data)
-    except (httpx.HTTPError, ValueError, KeyError) as err:
+    except ExternalServiceRateLimitError:
+        raise
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as err:
         raise ExternalServiceError(f"Rule Engine service request failed: {str(err)}") from err
+

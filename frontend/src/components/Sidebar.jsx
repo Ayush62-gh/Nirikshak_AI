@@ -6,6 +6,7 @@ import {
   BookOpen,
   Settings,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 const navigationItems = [
@@ -44,14 +45,32 @@ const navigationItems = [
 
 ];
 
-function Sidebar() {
+function Sidebar({ isMobileOpen, onClose })  {
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-screen w-64 flex-col overflow-hidden bg-[#12355B] text-white">
+    <aside
+  className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col overflow-hidden bg-[#12355B] text-white transition-transform duration-300 ease-in-out ${
+    isMobileOpen ? "translate-x-0" : "-translate-x-full"
+  } md:translate-x-0`}
+>
       
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white">
+        <button
+          onClick={onClose}
+          className="ml-auto rounded-lg p-1 text-white/70 transition hover:bg-white/10 hover:text-white md:hidden"
+          aria-label="Close menu"
+          >
+        <X size={22} />
+        </button>
+        {/* <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white">
           <ShieldCheck size={26} />
+        </div> */}
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 overflow-hidden">
+        <img
+             src="/nirikshak-icon-2.png"
+             alt="NIRIKSHAK"
+             className="h-10 w-10 object-contain"
+             />
         </div>
 
         <div>

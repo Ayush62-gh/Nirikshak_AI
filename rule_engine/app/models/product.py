@@ -66,6 +66,10 @@ class EvaluateProductRequest(BaseModel):
     yearOfPacking: Optional[str] = Field(None, description="Year of packing/manufacture (e.g., '2026')")
     consumerCare: Optional[str] = Field(None, description="Consumer care email, phone, or address details")
     countryOfOrigin: Optional[str] = Field(None, description="Country of Origin (mandatory for imported goods)")
+    unitSalePrice: Optional[str] = Field(None, description="Declared Unit Sale Price (e.g., Rs. 0.50/g, Rs. 200/kg)")
+    expiryDate: Optional[str] = Field(None, description="Best before or expiry date declaration (e.g., Best Before 12 Months, 12/2027)")
+    fontSizeMm: Optional[float] = Field(None, description="Extracted font size height in mm of mandatory declarations")
+    principalDisplayAreaCm2: Optional[float] = Field(None, description="Principal Display Panel surface area in square centimeters")
     fieldEvidence: Optional[Dict[str, RuleEvidence]] = Field(default_factory=dict, description="Optional metadata map connecting fields to RuleEvidence provenance")
 
     model_config = ConfigDict(

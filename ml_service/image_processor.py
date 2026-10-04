@@ -253,7 +253,7 @@ def _score_candidate_evidence(field_key, value, text_blocks, full_text):
     return 2
 
 
-def process_product_image(image_path, ocr_engine=None):
+def process_product_image(image_path):
     """
     Ek product image ka complete OCR pipeline run karta hai.
 
@@ -267,8 +267,6 @@ def process_product_image(image_path, ocr_engine=None):
          automatically retry with preprocess.py and merge missing fields.
     4. Annotated image generation & return format
     """
-    if ocr_engine is None:
-        ocr_engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
 
     # Step 1: Original image ki quality check
     quality_result = check_image_quality(image_path)
@@ -303,19 +301,11 @@ def process_product_image(image_path, ocr_engine=None):
         target_image_path = image_path
 
     # Step 3: Primary OCR execution
-    if ocr_engine in ("easyocr", "easy_ocr", "easy"):
-        import ocr  # lazy import
-        ocr_result = ocr.extract_text(
-            image_path=target_image_path,
-            create_annotation=True,
-            annotation_folder="annotated_images"
-        )
-    else:
-        ocr_result = paddle_ocr.extract_text(
-            image_path=target_image_path,
-            create_annotation=True,
-            annotation_folder="annotated_images"
-        )
+    ocr_result = paddle_ocr.extract_text(
+        image_path=target_image_path,
+        create_annotation=True,
+        annotation_folder="annotated_images"
+    )
 
     if not ocr_result.get("success"):
         return create_processing_error(
@@ -343,16 +333,10 @@ def process_product_image(image_path, ocr_engine=None):
             )
             if preprocessing_result.get("success"):
                 processed_image_path = preprocessing_result["processed_image_path"]
-                if ocr_engine in ("easyocr", "easy_ocr", "easy"):
-                    secondary_ocr = ocr.extract_text(
-                        image_path=processed_image_path,
-                        create_annotation=False
-                    )
-                else:
-                    secondary_ocr = paddle_ocr.extract_text(
-                        image_path=processed_image_path,
-                        create_annotation=False
-                    )
+                secondary_ocr = paddle_ocr.extract_text(
+                    image_path=processed_image_path,
+                    create_annotation=False
+                )
 
                 if secondary_ocr.get("success"):
                     secondary_fields = extract_fields(secondary_ocr)
@@ -398,13 +382,11 @@ def process_product_image(image_path, ocr_engine=None):
     }
 
 
-def process_product_images(image_paths, ocr_engine=None):
+def process_product_images(image_paths):
     """
     Processes multiple images of the same product (e.g. Front, Back, Side)
     and merges extracted Metrology fields with consensus & conflict resolution.
     """
-    if ocr_engine is None:
-        ocr_engine = os.getenv("OCR_ENGINE", "paddle").strip().lower()
 
     if not isinstance(image_paths, (list, tuple)):
         return {
@@ -444,8 +426,7 @@ def process_product_images(image_paths, ocr_engine=None):
 
     for idx, image_path in enumerate(image_paths):
         image_result = process_product_image(
-            image_path,
-            ocr_engine=ocr_engine
+            image_path
         )
 
         result_with_path = {

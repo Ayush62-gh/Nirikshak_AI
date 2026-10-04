@@ -13,7 +13,7 @@ function AccountSettings() {
   };
 
   return (
-    <section className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-red-100 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
+    <section className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-red-100 bg-[#F1FAF8] p-6 shadow-sm sm:flex-row sm:items-center">
 
       <div className="flex items-center gap-4">
 

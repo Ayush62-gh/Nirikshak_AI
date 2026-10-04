@@ -26,6 +26,7 @@ class ComplianceResult(BaseModel):
 
 class ScanResponse(BaseModel):
     scan_id: str
+    user_id: str | None = None
     timestamp: datetime
     product: ProductFields
     extracted_fields: dict = Field(default_factory=dict)
@@ -56,6 +57,7 @@ class ScanResponse(BaseModel):
 
         return cls(
             scan_id=row["scan_id"],
+            user_id=row.get("user_id"),
             timestamp=row["timestamp"],
             product=product,
             extracted_fields=row.get("extracted_fields") or {},

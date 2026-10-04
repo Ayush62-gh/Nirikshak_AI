@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, JSON
+from sqlalchemy import Column, String, DateTime, JSON, ForeignKey
 from app.db.session import Base
 
 
@@ -8,6 +8,7 @@ class Scan(Base):
     __tablename__ = "scans"
 
     scan_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     product_name = Column(String, nullable=True)
     manufacturer = Column(String, nullable=True)
@@ -31,6 +32,7 @@ class Scan(Base):
 
         return {
             "scan_id": self.scan_id,
+            "user_id": self.user_id,
             "timestamp": ts_str,
             "product_name": self.product_name,
             "manufacturer": self.manufacturer,
@@ -44,3 +46,4 @@ class Scan(Base):
             "violations": self.violations,
             "image_ref": self.image_ref,
         }
+

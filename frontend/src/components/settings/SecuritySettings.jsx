@@ -5,7 +5,7 @@ function SecuritySettings() {
   const [twoFactor, setTwoFactor] = useState(false);
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm">
+    <section className="rounded-2xl bg-[#F1FAF8] p-6 shadow-sm">
 
       {/* Header */}
       <div className="mb-3 flex items-center gap-3">

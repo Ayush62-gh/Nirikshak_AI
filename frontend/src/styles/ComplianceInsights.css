@@ -206,3 +206,57 @@
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* Mobile Responsive */
+@media (max-width: 767px) {
+  .insights-card {
+    grid-template-columns: 1fr;
+    margin-top: 16px;
+  }
+
+  .compliance-section,
+  .violations-section,
+  .ai-insight {
+    padding: 16px;
+  }
+
+  .violations-section {
+    border-left: none;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .compliance-content {
+    gap: 20px;
+    margin-top: 18px;
+  }
+
+  .donut-chart {
+    width: 110px;
+    height: 110px;
+  }
+
+  .donut-inner {
+    width: 68px;
+    height: 68px;
+  }
+
+  .donut-inner strong {
+    font-size: 20px;
+  }
+
+  .compliance-legend {
+    gap: 10px;
+  }
+
+  .legend-label {
+    font-size: 13px;
+  }
+
+  .legend-value {
+    font-size: 12px;
+  }
+
+  .ai-insight {
+    margin: 12px;
+  }
+}

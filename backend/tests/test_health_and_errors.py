@@ -49,7 +49,12 @@ def test_external_service_error_handling(monkeypatch):
 
     monkeypatch.setattr(ocr_client, "extract_fields", mock_failed_extract)
 
-    fake_image_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00\x48\x00\x48\x00\x00\xFF\xD9"
+    import io
+    from PIL import Image
+    img = Image.new("RGB", (10, 10), color="blue")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    fake_image_bytes = buf.getvalue()
     files = {"image": ("test.jpg", fake_image_bytes, "image/jpeg")}
 
     response = client.post("/api/scan", files=files, headers=headers)
@@ -77,3 +82,54 @@ def test_generic_500_exception_handler_no_traceback_leak(monkeypatch):
     assert data["detail"] == "Internal server error"
     assert "Secret DB Password" not in str(data)
     assert "Traceback" not in str(data)
+
+
+def test_jwt_secret_validation_raises_error(monkeypatch):
+    from pydantic import ValidationError
+    from app.core.config import Settings
+
+    monkeypatch.setenv("JWT_SECRET", "")
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(JWT_SECRET="")
+    assert "JWT_SECRET" in str(exc_info.value)
+
+
+def test_cors_configuration_non_wildcard():
+    # Valid configured origin returns matching Access-Control-Allow-Origin
+    res_valid = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert res_valid.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert res_valid.headers.get("access-control-allow-origin") != "*"
+
+    # Unconfigured origin is rejected (no access-control-allow-origin header)
+    res_invalid = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://malicious-unauthorized-site.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert res_invalid.headers.get("access-control-allow-origin") != "http://malicious-unauthorized-site.com"
+    assert res_invalid.headers.get("access-control-allow-origin") != "*"
+
+
+def test_db_migration_error_logging(monkeypatch, caplog):
+    import logging
+    from app.db import session
+
+    def mock_bad_connect(*args, **kwargs):
+        raise RuntimeError("Simulated DB Connection Error during migration")
+
+    import sqlite3
+    monkeypatch.setattr(sqlite3, "connect", mock_bad_connect)
+
+    with caplog.at_level(logging.WARNING, logger="nirikshak.db"):
+        session._migrate_add_user_id_column()
+
+    assert any("Database user_id column migration check failed" in rec.message for rec in caplog.records)
+

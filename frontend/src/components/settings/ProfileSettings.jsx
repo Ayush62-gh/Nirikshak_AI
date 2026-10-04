@@ -17,7 +17,7 @@ function ProfileSettings() {
     : "IN";
 
   return (
-    <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-[#F1FAF8] shadow-sm">
 
       {/* Header */}
       <div className="px-6 py-4">

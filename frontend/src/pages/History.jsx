@@ -3,6 +3,7 @@ import { getScans, getScanById } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import confetti from "canvas-confetti";
 import { generateComplianceReportPDF } from "../utils/reportGenerator";
+import { formatFontSize } from "../utils/formatFontSize";
 import {
   Search,
   CalendarDays,
@@ -686,7 +687,7 @@ function History() {
             <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
             <p className="text-xs text-slate-400 font-medium">Font Size</p>
             <p className="mt-1 font-semibold text-slate-800 break-words">
-              {scanDetails.extracted_fields?.font_size_mm || "Not Detected"}
+              {formatFontSize(scanDetails.extracted_fields)}
              </p>
             </div>
                   </div>

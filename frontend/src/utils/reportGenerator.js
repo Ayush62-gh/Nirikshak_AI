@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { formatFontSize } from "./formatFontSize";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -105,7 +106,7 @@ function addProductDetails(doc, product,extractedFields, y) {
     ["Importer Name", extractedFields?.importer_name || "Not Detected"],
     ["Expiry Date", extractedFields?.expiry_date || "Not Detected"],
     ["Unit Sale Price", extractedFields?.unit_sale_price || "Not Detected"],
-    ["Font Size", extractedFields?.font_size_mm || "Not Detected"],
+    ["Font Size", formatFontSize(extractedFields)],
   ];
 
   fields.forEach(([label, value]) => {

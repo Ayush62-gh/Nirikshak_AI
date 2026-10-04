@@ -26,7 +26,7 @@ def test_build_rule_engine_request_mapping():
 
     assert request_body["productId"] == "test-prod-100"
     assert request_body["productName"] == "Sample Biscuits 200g"
-    assert request_body["productType"] == "food"
+    assert request_body["productType"] is None
     assert request_body["isImported"] is False
     assert request_body["manufacturerName"] == "ABC Foods Pvt Ltd"
     assert request_body["manufacturerAddress"] == "123 Industrial Estate, Delhi"
@@ -41,6 +41,25 @@ def test_build_rule_engine_request_mapping():
     assert request_body["consumerCare"] == "1800-XXX-XXXX"
     assert request_body["countryOfOrigin"] == "India"
     assert "fontSizeMm" not in request_body
+
+
+def test_build_rule_engine_request_product_type_none_and_expiry_handling():
+    # Payload built from an extracted dict with no expiry_date has productType None and expiryDate None
+    extracted_without_expiry = {
+        "product_name": "Generic Product",
+    }
+    req_no_expiry = _build_rule_engine_request(extracted_without_expiry)
+    assert req_no_expiry["productType"] is None
+    assert req_no_expiry["expiryDate"] is None
+
+    # Payload with expiry_date "08/2027" has productType None and expiryDate "08/2027"
+    extracted_with_expiry = {
+        "product_name": "Generic Product",
+        "expiry_date": "08/2027",
+    }
+    req_with_expiry = _build_rule_engine_request(extracted_with_expiry)
+    assert req_with_expiry["productType"] is None
+    assert req_with_expiry["expiryDate"] == "08/2027"
 
 
 def test_build_rule_engine_request_no_hardcoded_india():

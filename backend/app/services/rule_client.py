@@ -25,8 +25,9 @@ def _build_rule_engine_request(extracted_fields: dict) -> dict:
     return {
         "productId": product_id,
         "productName": extracted.get("product_name"),
-        # TODO: Should eventually come from OCR or user input; hardcoded "food" for MVP
-        "productType": "food",
+        # productType is not detected by OCR or collected from the user yet; sending
+        # None means the expiry rule only applies when an expiry value is present.
+        "productType": None,
         # TODO: Should eventually be detected/provided; hardcoded False for MVP
         "isImported": False,
         "manufacturerName": extracted.get("manufacturer"),

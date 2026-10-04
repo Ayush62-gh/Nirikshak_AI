@@ -38,6 +38,21 @@ def _parse_ocr_response(response: dict) -> dict:
     quality_status = quality.get("quality_status") or fields.get("quality_status")
     extraction_confidence = fields.get("extraction_confidence")
 
+    font_px_comp = fields.get("fontHeightPxComparison")
+    if isinstance(font_px_comp, dict):
+        measured_blocks = font_px_comp.get("measured_blocks")
+        if isinstance(measured_blocks, list) and len(measured_blocks) > 0:
+            font_readability_px = {
+                "smallest": font_px_comp.get("smallest_height_px"),
+                "median": font_px_comp.get("median_height_px"),
+                "largest": font_px_comp.get("largest_height_px"),
+                "block_count": len(measured_blocks),
+            }
+        else:
+            font_readability_px = None
+    else:
+        font_readability_px = None
+
     return {
         "product_name": fields.get("productName"),
         "manufacturer": fields.get("manufacturerName"),
@@ -55,6 +70,7 @@ def _parse_ocr_response(response: dict) -> dict:
         "unit_sale_price": fields.get("unitSalePrice"),
         "font_size_mm": fields.get("fontHeightMm"),
         "expiry_date": expiry_date,
+        "font_readability_px": font_readability_px,
     }
 
 

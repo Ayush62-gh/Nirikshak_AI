@@ -2020,6 +2020,60 @@ def _is_statutory_declaration_block(block):
     return bool(_STATUTORY_DECLARATION_RE.search(text))
 
 
+def _extract_font_height_px_comparison(text_blocks):
+    """
+    Measures OCR bounding-box heights in pixels for statutory Legal Metrology
+    declaration blocks within the same image.
+
+    No calibration, DPI, physical reference, or pixel-to-mm conversion is used.
+    This is a relative intra-image comparison only.
+    """
+    measured = []
+
+    for index, block in enumerate(text_blocks):
+        if not _is_statutory_declaration_block(block):
+            continue
+
+        metrics = _box_metrics(block)
+        if not metrics:
+            continue
+
+        height_px = metrics[3] - metrics[1]
+        if height_px <= 0:
+            continue
+
+        measured.append({
+            "block_index": index,
+            "text": block.get("text", "").strip(),
+            "height_px": int(round(height_px))
+        })
+
+    if not measured:
+        return {
+            "unit": "pixels",
+            "calibration_reference_used": False,
+            "measured_blocks": [],
+            "smallest_height_px": None,
+            "largest_height_px": None,
+            "median_height_px": None,
+            "height_range_px": None
+        }
+
+    heights = sorted(item["height_px"] for item in measured)
+    n = len(heights)
+    median = float(heights[n // 2]) if n % 2 else (heights[n // 2 - 1] + heights[n // 2]) / 2.0
+
+    return {
+        "unit": "pixels",
+        "calibration_reference_used": False,
+        "measured_blocks": measured,
+        "smallest_height_px": min(heights),
+        "largest_height_px": max(heights),
+        "median_height_px": round(median, 2),
+        "height_range_px": [min(heights), max(heights)]
+    }
+
+
 def _extract_font_height_mm(text_blocks, calibration_px_per_mm=None):
     """
     Returns physical font height in millimetres of the smallest relevant
@@ -2360,6 +2414,9 @@ def extract_fields(ocr_result: dict, calibration_px_per_mm: float = None) -> dic
     # Rule 12: font height mm — requires physical calibration reference.
     font_height_mm = _extract_font_height_mm(filtered_text_blocks, calibration_px_per_mm=calibration_px_per_mm)
 
+    # Relative font-size comparison using direct OCR bounding-box heights in pixels.
+    font_height_px_comparison = _extract_font_height_px_comparison(filtered_text_blocks)
+
     # Batch Number Extraction
     batch_number = _extract_batch_number(filtered_text_blocks, filtered_full_text, raw_blocks=text_blocks)
 
@@ -2427,6 +2484,7 @@ def extract_fields(ocr_result: dict, calibration_px_per_mm: float = None) -> dic
         "consumerCare": care_info,
         "countryOfOrigin": country_of_origin,
         "fontHeightMm": font_height_mm,           # Rule 12 — always None without calibration
+        "fontHeightPxComparison": font_height_px_comparison,
         "batchNumber": batch_number,
         "extraction_confidence": confidence_flag
     }

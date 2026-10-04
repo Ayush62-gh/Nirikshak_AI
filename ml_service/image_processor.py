@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 
 import paddle_ocr
@@ -29,6 +30,227 @@ def _calculate_mean_confidence(text_blocks):
         return 0.0
     confidences = [b.get("confidence", 0.0) for b in text_blocks if isinstance(b, dict)]
     return sum(confidences) / len(confidences) if confidences else 0.0
+
+
+def _find_field_ocr_confidence(value, text_blocks, default_conf):
+    """Finds the OCR confidence of the text block best matching the candidate value."""
+    if not value or not text_blocks:
+        return default_conf
+    val_str = str(value).strip().lower()
+    matching_confs = []
+    for b in text_blocks:
+        if not isinstance(b, dict):
+            continue
+        b_text = str(b.get("text", "")).strip().lower()
+        if not b_text:
+            continue
+        if val_str in b_text or b_text in val_str:
+            matching_confs.append(float(b.get("confidence", default_conf)))
+        else:
+            tokens = [t for t in re.split(r'[\s:,\-/]+', val_str) if len(t) >= 3]
+            if tokens and any(t in b_text for t in tokens):
+                matching_confs.append(float(b.get("confidence", default_conf)))
+    if matching_confs:
+        return max(matching_confs)
+    return default_conf
+
+
+def _score_candidate_evidence(field_key, value, text_blocks, full_text):
+    """
+    Evaluates field-specific extraction evidence and contextual label strength.
+    Returns an integer evidence weight:
+      3: Strong statutory evidence (explicit statutory label + valid field format)
+      2: Moderate evidence (valid field structure / unit / format, partial contextual label)
+      1: Weak evidence (unanchored, fallback, bare number or single word)
+      0: Invalid (fails basic validity check for this field)
+    """
+    if value is None or str(value).strip() == "":
+        return 0
+    val_str = str(value).strip()
+    val_lower = val_str.lower()
+    full_lower = (full_text or "").lower()
+
+    if field_key == "mrp":
+        # Must look like a price, never a pure net-quantity unit
+        if re.search(r'(?i)\b\d+\s*(?:ml|g|kg|l|gm)\b', val_str) and not re.search(r'(?i)\b(?:rs|inr|₹|mrp|/-)\b', val_str):
+            return 0
+        has_price_num = bool(re.search(r'\d+(?:\.\d+)?', val_str))
+        if not has_price_num:
+            return 0
+        has_mrp_label = bool(
+            re.search(r'(?i)\b(?:mrp|maximum\s*retail\s*price|incl|taxes)\b', val_str)
+            or re.search(r'(?i)\b(?:mrp|maximum\s*retail\s*price)\b', full_lower)
+        )
+        has_curr = bool(re.search(r'(?i)(?:rs\.?|inr|₹|/-)', val_str))
+        if has_mrp_label and (has_curr or re.search(r'(?i)incl.*tax', val_str)):
+            return 3
+        if has_mrp_label or has_curr:
+            return 2
+        return 1
+
+    elif field_key == "netQuantity":
+        has_unit = bool(re.search(r'(?i)\b(?:ml|l|g|kg|gm|gms|n|u|piece|count)\b', val_str))
+        has_qty_label = bool(re.search(r'(?i)\b(?:net\s*qty|net\s*wt|net\s*quantity|net\s*content|net\s*vol)\b', full_lower))
+        if has_unit and has_qty_label:
+            return 3
+        if has_unit:
+            return 2
+        return 1
+
+    elif field_key in ("manufacturerName", "packerName"):
+        has_mfg_label = bool(re.search(r'(?i)\b(?:manufactured\s*by|mfg\.?\s*by|mfd\.?\s*by|produced\s*by|packed\s*by|manufacturer:)\b', full_lower))
+        has_corp_suffix = bool(re.search(r'(?i)\b(?:pvt\.?\s*ltd|ltd\.?|limited|private\s*limited|llp|inc\.?)\b', val_str))
+        if has_mfg_label and has_corp_suffix:
+            return 3
+        if has_mfg_label or has_corp_suffix:
+            return 2
+        words = re.findall(r'[A-Za-z]{2,}', val_str)
+        if len(words) >= 2:
+            return 2
+        return 1
+
+    elif field_key == "importerName":
+        has_imp_label = bool(re.search(r'(?i)\b(?:imported\s*by|importer\s*name|imp\.?\s*by|import\s*&\s*marketed)\b', full_lower))
+        has_corp_suffix = bool(re.search(r'(?i)\b(?:pvt\.?\s*ltd|ltd\.?|limited|private\s*limited|llp|inc\.?)\b', val_str))
+        if has_imp_label and has_corp_suffix:
+            return 3
+        if has_imp_label:
+            return 2
+        return 1
+
+    elif field_key == "unitSalePrice":
+        has_usp_label = bool(
+            re.search(r'(?i)\b(?:unit\s*sale\s*price|unit\s*price|sale\s*price\s*per|rs\.?/\s*(?:kg|g|ml|100g|100ml))\b', val_str)
+            or re.search(r'(?i)\b(?:unit\s*sale\s*price|unit\s*price)\b', full_lower)
+        )
+        if has_usp_label and re.search(r'\d+', val_str):
+            return 3
+        if re.search(r'(?i)(?:rs\.?|₹).*/\s*(?:kg|g|ml|100g|100ml|unit)', val_str):
+            return 2
+        return 1
+
+    elif field_key in ("monthOfPacking", "yearOfPacking"):
+        has_date_label = bool(re.search(r'(?i)\b(?:mfd|mfg|pkd|packed|manufacturing)\b', full_lower))
+        if has_date_label:
+            return 3
+        return 2
+
+    elif field_key in ("expiryMonth", "expiryYear"):
+        has_exp_label = bool(re.search(r'(?i)\b(?:exp|expiry|use\s*before|best\s*before|bbe)\b', full_lower))
+        if has_exp_label:
+            return 3
+        return 2
+
+    elif field_key == "consumerCare":
+        if "@" in val_str or re.search(r'\b1800\d{6,7}\b', val_str):
+            return 3
+        if re.search(r'(?i)\b(?:care|helpline|consumer|customer|toll[\s-]free)\b', full_lower):
+            return 2
+        return 1
+
+    elif field_key == "countryOfOrigin":
+        has_origin_label = bool(re.search(r'(?i)\b(?:country\s*of\s*origin|made\s*in|manufactured\s*in)\b', full_lower))
+        if has_origin_label:
+            return 3
+        return 2
+
+    elif field_key == "productName":
+        # Price/batch/code/date text = invalid (0)
+        if re.search(
+            r'(?i)(?:'
+            r'\d+(?:[.,]\d+)?\s*/?[-]?\s*\d*(?:\.\d+)?\s*/\s*(?:ml|g|kg|l|gm|unit)'
+            r'|\d+\s*/[-]'
+            r'|rs\.?\s*\d+'
+            r'|\d+\s*/-'
+            r'|[A-Z]{1,4}\d{3,}'
+            r'|\d{3,}[A-Z]{1,4}'
+            r'|\d+\.\d+\s*/\s*[a-zA-Z]+'
+            r'|@\s*\d+[/-]\d+'
+            r')',
+            val_str
+        ):
+            return 0
+
+        # Dangling prepositions or conjunctions = invalid (0)
+        if re.search(r'(?i)\b(?:for|withs?|ofs?|in|to|by|from|on|at|and|or|&)\s*(?:a|an|the)?\s*$', val_str):
+            return 0
+        if re.search(r'(?i)^(?:and|or|&|with|of|in|for|by|from|to)\s+', val_str):
+            return 0
+
+        # Instructional step / usage phrases = invalid (0)
+        if re.search(
+            r'(?i)(?:'
+            r'\b(?:\d+\s+)?steps?\s+(?:for|to|towards|in|of|ahead)\b'
+            r'|\b(?:follow|these|easy|simple)\s+(?:these\s+)?steps?\b'
+            r'|\bstep\s*[:.-]?\s*\d+\b'
+            r'|\bhow\s+to\s+(?:use|apply|wash|cleanse)\b'
+            r'|\broutine\s+steps?\b'
+            r'|\b(?:directions?|how\s+to|storage|warning|caution|tamper|external\s+use|flush|avoid|occurs?|safety|first\s+aid|formula\s+with|contains?|may\s+contain|trademark|compatibility|dermatolog[a-z]*|clinical[a-z]*|tested|made\s+(?:with|from|of)|(?:bottle|pack|container|tube|packaging)\s+made|recycled|excluding|over\s+time|appearance|the\s+product)\b'
+            r')',
+            val_str
+        ):
+            return 0
+
+        # Product claims, formula/skin/body attributes, benefits, and compatibility = invalid (0)
+        if re.search(
+            r'(?i)(?:'
+            r'\bph\s*(?:skin|neutral|balanced?|level|\d+(?:\.\d+)?)\b'
+            r'|\b(?:skin|body|scalp)\s*ph\b'
+            r'|\b(?:paraben|soap|sulphate|sulfate|silicone|dye|microplastic|alcohol)[-\s]*free\b'
+            r'|\b(?:microplastic|protecting|nourishing|cleansing)[-\s]*formula\b'
+            r'|\bformula\s+with\b'
+            r'|\b(?:skin|hair|scalp)\s+compatibility\b'
+            r'|\bcompatibility\s+(?:tested|approved|dermatologically)\b'
+            r'|\b(?:dermatolog[a-z]*|clinical[a-z]*|paediatric[a-z]*|pediatric[a-z]*|ophthalmolog[a-z]*)\s+(?:tested|proven|approved|certified)\b'
+            r'|\bhypoallergenic\b'
+            r'|\b(?:gentle|mild|soft|safe)\s+on\s+(?:the\s+)?(?:skin|hair|scalp|hands|body)\b'
+            r'|\b(?:protects?|nourish(?:es)?|sooth(?:es)?|hydrates?|moisturiz(?:es)?|moisturis(?:es)?)\s+(?:your\s+|the\s+)?(?:skin|hair|scalp)\b'
+            r'|\b(?:moisturiz(?:ed)?|moisturis(?:ed)?|hydrated)\s+skin\b'
+            r'|\b(?:healthy|glowing|radiant|dry|oily|sensitive)\s+skin\s*$'
+            r'|\b(?:suitable|ideal|formulated|crafted)\s+for\s+(?:all\s+)?(?:skin|hair|types?)\b'
+            r'|\b(?:all|every)\s+(?:skin|hair)\s+types?\b'
+            r'|\b(?:long|all-?day)\s+lasting\s+(?:freshness|fragrance|hydration|moisture|protection)\b'
+            r'|\b(?:germ|bacterial|odour|odor)\s+protection\b'
+            r')',
+            val_str
+        ):
+            return 0
+
+        # Reject URL, email, domain, or trademark strings
+        if re.search(r'(?i)@|https?://|www\.|\.[a-z]{2,}\b', val_str):
+            return 0
+
+        # Reject customer care, complaint, query, feedback, and cross-reference text
+        if re.search(r'(?i)(?:feedback|complaints?|queries|query|careline|toll\s*free|(?:see|refer|read)\s*(?:above|below|side|bottom|pkg|pack|panel))', val_str):
+            return 0
+
+        # Non-alpha dominated strings or sentences with punctuation = invalid (0)
+        if len(val_str) < 3 or '?' in val_str or '!' in val_str or val_str.endswith('.'):
+            return 0
+        alpha_ratio = sum(1 for ch in val_str if ch.isalpha()) / max(len(val_str), 1)
+        if alpha_ratio < 0.40:
+            return 0
+
+        # Instructional / promotional text = weak (1)
+        if re.search(r'(?i)\b(?:special|makes|delight|squeeze|rinse|massage|apply|lather|gently|feel|refreshing|experience|boost|enjoy|goodness|enriched)\b', val_str):
+            return 1
+
+        # Explicit product-name labels = strong evidence (3)
+        has_explicit_label = bool(
+            re.search(r'(?i)\b(?:product\s+name|generic\s+name|commodity\s+name|common\s+name)\b', full_lower)
+        )
+        words = re.findall(r'[A-Za-z]{2,}', val_str)
+        if has_explicit_label and len(words) >= 1:
+            return 3
+
+        # Plausible descriptive product text = moderate evidence (2)
+        if len(words) >= 2:
+            return 2
+        if len(words) == 1:
+            return 1
+        return 0
+
+    return 2
 
 
 def process_product_image(image_path):
@@ -231,7 +453,9 @@ def process_product_images(image_paths):
                 "source_path": str(image_path),
                 "source_filename": os.path.basename(str(image_path)),
                 "fields": fields,
-                "mean_ocr_confidence": mean_conf
+                "mean_ocr_confidence": mean_conf,
+                "text_blocks": text_blocks,
+                "full_text": full_text
             })
 
     combined_full_text = " ".join(combined_text_parts)
@@ -239,9 +463,12 @@ def process_product_images(image_paths):
     # Multi-Angle Field Evidence Merging Engine
     ALL_FIELD_KEYS = [
         "productId", "productName", "productType", "isImported",
-        "manufacturerName", "manufacturerAddress", "packerName", "importerName",
-        "netQuantity", "mrp", "monthOfPacking", "yearOfPacking",
-        "consumerCare", "countryOfOrigin"
+        "manufacturerName", "manufacturerAddress", "packerName", "importerName",  # Rule 9
+        "netQuantity", "mrp", "unitSalePrice",                                    # Rule 11
+        "monthOfPacking", "yearOfPacking",
+        "expiryMonth", "expiryYear",                                              # Rule 10
+        "consumerCare", "countryOfOrigin",
+        "fontHeightMm",                                                           # Rule 12
     ]
 
     merged_fields = {}
@@ -252,11 +479,18 @@ def process_product_images(image_paths):
         for ext in per_image_extractions:
             val = ext["fields"].get(field_key)
             if val is not None and str(val).strip() != "":
+                text_blocks = ext.get("text_blocks", [])
+                full_text = ext.get("full_text", "")
+                mean_conf = ext["mean_ocr_confidence"]
+                field_ocr_conf = _find_field_ocr_confidence(val, text_blocks, mean_conf)
+                evidence_strength = _score_candidate_evidence(field_key, val, text_blocks, full_text)
                 candidates.append({
                     "value": val,
                     "source_filename": ext["source_filename"],
                     "source_path": ext["source_path"],
-                    "ocr_confidence": round(ext["mean_ocr_confidence"], 3)
+                    "ocr_confidence": round(field_ocr_conf, 3),
+                    "mean_ocr_confidence": round(mean_conf, 3),
+                    "evidence_strength": evidence_strength
                 })
 
         if not candidates:
@@ -264,21 +498,79 @@ def process_product_images(image_paths):
             continue
 
         if len(candidates) == 1:
-            merged_fields[field_key] = candidates[0]["value"]
+            if candidates[0]["evidence_strength"] == 0:
+                merged_fields[field_key] = None
+            else:
+                merged_fields[field_key] = candidates[0]["value"]
             continue
 
         # Check for consensus (all non-None candidate values match when normalized)
         norm_values = set(str(c["value"]).strip().lower() for c in candidates)
         if len(norm_values) == 1:
-            merged_fields[field_key] = candidates[0]["value"]
+            if candidates[0]["evidence_strength"] == 0:
+                merged_fields[field_key] = None
+            else:
+                merged_fields[field_key] = candidates[0]["value"]
             continue
 
         # DISAGREEMENT / CONFLICT DETECTED across images!
-        # Tie-breaker rule: Select candidate with highest mean OCR confidence score
-        sorted_candidates = sorted(candidates, key=lambda c: c["ocr_confidence"], reverse=True)
+        # Field-aware resolution priority:
+        #   1. evidence_strength (contextual label evidence & field-specific validity)
+        #   2. ocr_confidence (field-specific text block confidence)
+        sorted_candidates = sorted(
+            candidates,
+            key=lambda c: (c["evidence_strength"], c["ocr_confidence"]),
+            reverse=True
+        )
         winning_candidate = sorted_candidates[0]
+        runner_up = sorted_candidates[1]
+
+        # Safety check: Can the conflict safely be resolved?
+        # - Top candidate is invalid (evidence_strength == 0)
+        # - Both top candidates are weak unsupported fallbacks without statutory labels (evidence_strength <= 1)
+        # - Dead tie between contradictory candidates with identical evidence and OCR confidence
+        cannot_safely_resolve = (
+            winning_candidate["evidence_strength"] == 0
+            or (winning_candidate["evidence_strength"] <= 1 and runner_up["evidence_strength"] <= 1)
+            or (winning_candidate["evidence_strength"] == runner_up["evidence_strength"]
+                and abs(winning_candidate["ocr_confidence"] - runner_up["ocr_confidence"]) < 0.001
+                and str(winning_candidate["value"]).strip().lower() != str(runner_up["value"]).strip().lower())
+        )
+
+        if cannot_safely_resolve:
+            merged_fields[field_key] = None
+            extraction_conflicts[field_key] = {
+                "resolved_value": None,
+                "competing_values": [
+                    {
+                        "value": c["value"],
+                        "source_image": c["source_filename"],
+                        "ocr_confidence": c["ocr_confidence"]
+                    }
+                    for c in candidates
+                ],
+                "resolution_reason": (
+                    "Candidates could not be safely resolved due to insufficient contextual "
+                    "evidence or tied OCR confidence; resolved to null for verification."
+                )
+            }
+            continue
 
         merged_fields[field_key] = winning_candidate["value"]
+        if winning_candidate["evidence_strength"] == runner_up["evidence_strength"]:
+            reason = (
+                f"Selected value '{winning_candidate['value']}' from image '{winning_candidate['source_filename']}' "
+                f"due to higher OCR confidence ({winning_candidate['ocr_confidence']:.3f} vs "
+                f"{runner_up['ocr_confidence']:.3f})."
+            )
+        else:
+            reason = (
+                f"Selected value '{winning_candidate['value']}' from image '{winning_candidate['source_filename']}' "
+                f"due to stronger statutory evidence (strength={winning_candidate['evidence_strength']} vs "
+                f"{runner_up['evidence_strength']}, ocr_confidence={winning_candidate['ocr_confidence']:.3f} vs "
+                f"{runner_up['ocr_confidence']:.3f})."
+            )
+
         extraction_conflicts[field_key] = {
             "resolved_value": winning_candidate["value"],
             "competing_values": [
@@ -289,18 +581,26 @@ def process_product_images(image_paths):
                 }
                 for c in candidates
             ],
-            "resolution_reason": (
-                f"Selected value '{winning_candidate['value']}' from image '{winning_candidate['source_filename']}' "
-                f"due to higher OCR confidence ({winning_candidate['ocr_confidence']:.3f} vs "
-                f"{sorted_candidates[1]['ocr_confidence']:.3f})."
-            )
+            "resolution_reason": reason
         }
 
-    # Set overall extraction_confidence grade
-    if extraction_conflicts:
+    # Set overall extraction_confidence grade for the merged result.
+    # HIGH requires: no unresolved conflicts AND at least 2 core statutory fields extracted.
+    # Simply having any extracted field is insufficient for HIGH confidence.
+    _core_statutory = {"mrp", "netQuantity", "manufacturerName", "monthOfPacking", "yearOfPacking"}
+    _extracted_core = sum(1 for k in _core_statutory if merged_fields.get(k) is not None)
+    has_unresolved_conflicts = any(
+        c.get("resolved_value") is None for c in extraction_conflicts.values()
+    )
+
+    if has_unresolved_conflicts:
+        merged_fields["extraction_confidence"] = "LOW"
+    elif extraction_conflicts:
         merged_fields["extraction_confidence"] = "MEDIUM"
-    elif any(merged_fields.values()):
+    elif _extracted_core >= 2:
         merged_fields["extraction_confidence"] = "HIGH"
+    elif _extracted_core >= 1 or any(merged_fields.get(k) for k in ALL_FIELD_KEYS if k not in _core_statutory):
+        merged_fields["extraction_confidence"] = "MEDIUM"
     else:
         merged_fields["extraction_confidence"] = "LOW"
 

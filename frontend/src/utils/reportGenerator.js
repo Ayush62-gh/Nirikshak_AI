@@ -91,15 +91,21 @@ function addLabelValue(doc, label, value, y) {
   return y + Math.max(7, valueLines.length * 5 + 2);
 }
 
-function addProductDetails(doc, product, y) {
+function addProductDetails(doc, product,extractedFields, y) {
   const fields = [
     ["Product Name", product?.product_name],
     ["Manufacturer", product?.manufacturer],
+    ["Manufacturer Address", product?.manufacturer_address],
     ["Net Quantity", product?.net_quantity],
     ["MRP", product?.mrp],
     ["Batch Number", product?.batch_number],
     ["Mfg Date", product?.mfg_date],
     ["Consumer Care", product?.consumer_care],
+    ["Country of Origin", extractedFields?.country_of_origin || "Not Detected"],
+    ["Importer Name", extractedFields?.importer_name || "Not Detected"],
+    ["Expiry Date", extractedFields?.expiry_date || "Not Detected"],
+    ["Unit Sale Price", extractedFields?.unit_sale_price || "Not Detected"],
+    ["Font Size", extractedFields?.font_size_mm || "Not Detected"],
   ];
 
   fields.forEach(([label, value]) => {
@@ -271,7 +277,8 @@ y = addSectionTitle(doc, "Inspector Information", y);
 
   // Product section
   y = addSectionTitle(doc, "Product Details", y);
-  y = addProductDetails(doc, product, y);
+  y= addProductDetails(doc, product, scanData?.extracted_fields, y)
+  // y = addProductDetails(doc, product, y);
 
   y += 5;
 

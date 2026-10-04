@@ -461,52 +461,95 @@ const retakePhoto = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">Product Name</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                      <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.product_name || "N/A"}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">Manufacturer</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.manufacturer || "N/A"}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">Net Quantity</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.net_quantity || "N/A"}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">MRP</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.mrp || "N/A"}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">Batch Number</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.batch_number || "N/A"}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">Mfg Date</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.mfg_date || "N/A"}
                     </p>
                   </div>
-
-                  <div className="col-span-full rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
+                    <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
                     <p className="text-xs font-medium text-[#6B7F99]">Consumer Care</p>
-                    <p className="mt-1 text-sm font-semibold text-[#142B4A]">
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
                       {scanResult.product?.consumer_care || "N/A"}
                     </p>
                   </div>
+                  <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
+                    <p className="text-xs font-medium text-[#6B7F99]">
+                     Country of Origin
+                    </p>
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
+                        {scanResult.extracted_fields?.country_of_origin || "Not Detected"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
+                      <p className="text-xs font-medium text-[#6B7F99]">
+                          Importer Name
+                      </p>
+                      <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
+                         {scanResult.extracted_fields?.importer_name || "Not Detected"}
+                      </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
+                    <p className="text-xs font-medium text-[#6B7F99]">
+                        Expiry Date
+                    </p>
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
+                      {scanResult.extracted_fields?.expiry_date || "Not Detected"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
+                    <p className="text-xs font-medium text-[#6B7F99]">
+                      Unit Sale Price
+                    </p>
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
+                      {scanResult.extracted_fields?.unit_sale_price || "Not Detected"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[#E9EFF6] bg-[#F8FAFC] p-3.5">
+                     <p className="text-xs font-medium text-[#6B7F99]">
+                       Font Size
+                     </p>
+                    <p className="mt-1 break-words text-sm font-semibold text-[#142B4A]">
+                      {scanResult.extracted_fields?.font_size_mm || "Not Detected"}
+                    </p>
+                  </div>
+
                 </div>
               </div>
 

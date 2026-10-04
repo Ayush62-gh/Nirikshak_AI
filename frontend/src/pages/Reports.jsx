@@ -217,14 +217,6 @@ function Reports() {
   onClick={() => {
     if (scans.length === 0) return;
     generateAnalyticsReportPDF(scans);
-     confetti({
-    particleCount: 120,
-    spread: 70,
-    origin: {
-      x: 0.5,
-      y: 0.7,
-    },
-  });
   }}
   disabled={loading || scans.length === 0}
   className="flex items-center gap-2 rounded-lg bg-[#0F766E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0B625C] disabled:cursor-not-allowed disabled:opacity-50"

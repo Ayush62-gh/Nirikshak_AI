@@ -293,14 +293,6 @@ function History() {
     }
 
     handleExportReport(filteredInspections[0]);
-    confetti({
-    particleCount: 120,
-    spread: 70,
-    origin: {
-      x: 0.5,
-      y: 0.7,
-    },
-  });
   }}
 >
   <Download size={18} />
@@ -516,10 +508,12 @@ function History() {
       {/* View Details Modal Overlay */}
       {selectedScanId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl transition-all my-8 border border-slate-200">
+          {/* <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl transition-all my-8 border border-slate-200"> */}
+          <div className="relative flex h-[90vh] max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200">
             
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            {/* <div className="flex items-center justify-between border-b border-slate-100 pb-4"> */}
+            <div className="shrink-0 flex items-center justify-between border-b border-slate-100 p-6 pb-4">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">
                   Inspection Details
@@ -538,6 +532,7 @@ function History() {
             </div>
 
             {/* Modal Content */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-1 scrollbar-hide">
             {detailsLoading ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-500">
                 <Loader2 size={32} className="animate-spin text-teal-600 mb-3" />
@@ -560,7 +555,7 @@ function History() {
                 </div>
               </div>
             ) : scanDetails ? (
-              <div className="mt-5 space-y-6">
+              <div className="space-y-6">
 
                 {/* Status & Timestamp Header Banner */}
                 <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-50 p-4 border border-slate-200/80">
@@ -618,6 +613,7 @@ function History() {
                     </div>
 
                     <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs sm:col-span-2">
+                    {/* <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs"> */}
                       <p className="text-xs text-slate-400 font-medium">Manufacturer Address</p>
                       <p className="mt-1 font-semibold text-slate-800">
                         {scanDetails.extracted_fields?.manufacturer_address || "Not Detected"}
@@ -652,12 +648,47 @@ function History() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs sm:col-span-2">
+                    {/* <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs sm:col-span-2"> */}
+                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
                       <p className="text-xs text-slate-400 font-medium">Consumer Care Details</p>
                       <p className="mt-1 font-semibold text-slate-800">
                         {scanDetails.product?.consumer_care || scanDetails.extracted_fields?.consumer_care || "Not Declared"}
                       </p>
                     </div>
+                    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+                     <p className="text-xs text-slate-400 font-medium">Country of Origin</p>
+                     <p className="mt-1 font-semibold text-slate-800 break-words">
+                    {scanDetails.extracted_fields?.country_of_origin || "Not Declared"} 
+                    </p>
+                   </div>
+
+                  <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+                  <p className="text-xs text-slate-400 font-medium">Importer Name</p>
+                  <p className="mt-1 font-semibold text-slate-800 break-words">
+                  {scanDetails.extracted_fields?.importer_name || "Not Declared"}
+                 </p>
+               </div>
+
+               <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+               <p className="text-xs text-slate-400 font-medium">Expiry Date</p>
+               <p className="mt-1 font-semibold text-slate-800 break-words">
+               {scanDetails.extracted_fields?.expiry_date || "Not Declared"}
+               </p>
+              </div>
+
+             <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+              <p className="text-xs text-slate-400 font-medium">Unit Sale Price</p>
+              <p className="mt-1 font-semibold text-slate-800 break-words">
+                {scanDetails.extracted_fields?.unit_sale_price || "Not Detected"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-2xs">
+            <p className="text-xs text-slate-400 font-medium">Font Size</p>
+            <p className="mt-1 font-semibold text-slate-800 break-words">
+              {scanDetails.extracted_fields?.font_size_mm || "Not Detected"}
+             </p>
+            </div>
                   </div>
                 </div>
 
@@ -709,9 +740,11 @@ function History() {
 
               </div>
             ) : null}
+            </div>
 
             {/* Modal Footer */}
-            <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+            {/* <div className="mt-6 flex justify-end border-t border-slate-100 pt-4"> */}
+            <div className="shrink-0 flex justify-end border-t border-slate-100 px-6 py-4">
               <button
               onClick={() => generateComplianceReportPDF(scanDetails, user)}
               disabled={!scanDetails}

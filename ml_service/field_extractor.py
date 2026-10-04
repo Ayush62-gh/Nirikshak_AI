@@ -2066,6 +2066,69 @@ def _extract_font_height_mm(text_blocks, calibration_px_per_mm=None):
     return round(min_pixel_height / calib, 2)
 
 
+def _extract_font_readability(text_blocks):
+    """
+    Performs a relative font-size/readability check using OCR bounding-box heights only.
+
+    This deliberately does NOT convert pixels to millimetres and does not require a
+    physical calibration reference. It compares mandatory/statutory declaration text
+    blocks within the same image.
+
+    Returns a dict containing:
+      - fontHeightPx: smallest statutory declaration block height in pixels
+      - fontHeightMedianPx: median statutory declaration height in pixels
+      - fontHeightRatio: smallest / median height
+      - fontReadabilityStatus: CONSISTENT, NEEDS_REVIEW, or INSUFFICIENT_DATA
+
+    IMPORTANT: this is a relative readability signal, not proof of absolute statutory
+    millimetre compliance. A NEEDS_REVIEW result means the declaration text is
+    unusually smaller than the other detected statutory declarations in the image.
+    """
+    statutory_blocks = []
+    for block in text_blocks:
+        if not _is_statutory_declaration_block(block):
+            continue
+        metrics = _box_metrics(block)
+        if not metrics:
+            continue
+        height_px = metrics[3] - metrics[1]
+        if height_px > 0:
+            statutory_blocks.append({
+                "text": block.get("text", "").strip(),
+                "height_px": float(height_px),
+            })
+
+    if len(statutory_blocks) < 2:
+        return {
+            "fontHeightPx": round(statutory_blocks[0]["height_px"], 2) if statutory_blocks else None,
+            "fontHeightMedianPx": round(statutory_blocks[0]["height_px"], 2) if statutory_blocks else None,
+            "fontHeightRatio": 1.0 if statutory_blocks else None,
+            "fontReadabilityStatus": "INSUFFICIENT_DATA",
+        }
+
+    heights = sorted(item["height_px"] for item in statutory_blocks)
+    middle = len(heights) // 2
+    if len(heights) % 2:
+        median_height = heights[middle]
+    else:
+        median_height = (heights[middle - 1] + heights[middle]) / 2.0
+
+    min_height = heights[0]
+    ratio = min_height / median_height if median_height > 0 else 0.0
+
+    # Relative heuristic only: a declaration that is materially smaller than the
+    # typical statutory text on the same label is sent for review. This threshold
+    # must not be interpreted as an absolute legal font-size requirement.
+    status = "CONSISTENT" if ratio >= 0.80 else "NEEDS_REVIEW"
+
+    return {
+        "fontHeightPx": round(min_height, 2),
+        "fontHeightMedianPx": round(median_height, 2),
+        "fontHeightRatio": round(ratio, 3),
+        "fontReadabilityStatus": status,
+    }
+
+
 def _extract_product_name(text_blocks, full_text, known_extracted):
     """
     Extracts product name with strict conservative prioritization:
@@ -2357,8 +2420,11 @@ def extract_fields(ocr_result: dict, calibration_px_per_mm: float = None) -> dic
     importer_name = _extract_importer(filtered_text_blocks, filtered_full_text)           # Rule 9
     unit_sale_price = _extract_unit_sale_price(filtered_text_blocks, filtered_full_text)  # Rule 11
 
-    # Rule 12: font height mm — requires physical calibration reference.
+    # Rule 12: absolute physical font height in mm — requires calibration.
     font_height_mm = _extract_font_height_mm(filtered_text_blocks, calibration_px_per_mm=calibration_px_per_mm)
+
+    # Relative readability check — uses OCR pixel heights only; no calibration required.
+    font_readability = _extract_font_readability(filtered_text_blocks)
 
     # Batch Number Extraction
     batch_number = _extract_batch_number(filtered_text_blocks, filtered_full_text, raw_blocks=text_blocks)
@@ -2426,7 +2492,11 @@ def extract_fields(ocr_result: dict, calibration_px_per_mm: float = None) -> dic
         "expiryYear": exp_year,                   # Rule 10
         "consumerCare": care_info,
         "countryOfOrigin": country_of_origin,
-        "fontHeightMm": font_height_mm,           # Rule 12 — always None without calibration
+        "fontHeightMm": font_height_mm,           # Rule 12 — None without calibration
+        "fontHeightPx": font_readability["fontHeightPx"],
+        "fontHeightMedianPx": font_readability["fontHeightMedianPx"],
+        "fontHeightRatio": font_readability["fontHeightRatio"],
+        "fontReadabilityStatus": font_readability["fontReadabilityStatus"],
         "batchNumber": batch_number,
         "extraction_confidence": confidence_flag
     }

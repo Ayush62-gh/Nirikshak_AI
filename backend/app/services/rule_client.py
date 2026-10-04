@@ -32,14 +32,15 @@ def _build_rule_engine_request(extracted_fields: dict) -> dict:
         "manufacturerName": extracted.get("manufacturer"),
         "manufacturerAddress": extracted.get("manufacturer_address"),
         "packerName": None,
-        "importerName": None,
+        "importerName": extracted.get("importer_name"),
         "netQuantity": extracted.get("net_quantity"),
         "mrp": extracted.get("mrp"),
+        "unitSalePrice": extracted.get("unit_sale_price"),
         "monthOfPacking": month_of_packing,
         "yearOfPacking": year_of_packing,
+        "expiryDate": extracted.get("expiry_date"),
         "consumerCare": extracted.get("consumer_care"),
-        # TODO: Hardcoded assumption for MVP, should come from OCR/detection eventually
-        "countryOfOrigin": "India",
+        "countryOfOrigin": extracted.get("country_of_origin"),
     }
 
 

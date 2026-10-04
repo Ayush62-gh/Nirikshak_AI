@@ -27,6 +27,14 @@ def _parse_ocr_response(response: dict) -> dict:
     else:
         mfg_date = None
 
+    exp_month = fields.get("expiryMonth")
+    exp_year = fields.get("expiryYear")
+
+    if exp_month and exp_year:
+        expiry_date = f"{exp_month}/{exp_year}"
+    else:
+        expiry_date = None
+
     quality_status = quality.get("quality_status") or fields.get("quality_status")
     extraction_confidence = fields.get("extraction_confidence")
 
@@ -42,6 +50,11 @@ def _parse_ocr_response(response: dict) -> dict:
         "manufacturer_address": fields.get("manufacturerAddress"),
         "quality_status": quality_status,
         "extraction_confidence": extraction_confidence,
+        "country_of_origin": fields.get("countryOfOrigin"),
+        "importer_name": fields.get("importerName"),
+        "unit_sale_price": fields.get("unitSalePrice"),
+        "font_size_mm": fields.get("fontHeightMm"),
+        "expiry_date": expiry_date,
     }
 
 

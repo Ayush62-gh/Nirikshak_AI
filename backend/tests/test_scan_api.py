@@ -361,4 +361,70 @@ def test_post_scan_failure_prevents_db_persistence(monkeypatch):
     assert final_list["total"] == initial_total
 
 
+def test_post_scan_and_get_scans_new_extracted_fields(monkeypatch):
+    from app.services import ocr_client
+
+    headers = get_auth_header()
+
+    mock_extracted = {
+        "product_name": "Imported Pasta 500g",
+        "manufacturer": "Italian Foods SpA",
+        "net_quantity": "500 g",
+        "mrp": "Rs. 250",
+        "batch_number": None,
+        "mfg_date": "03/2026",
+        "consumer_care": "care@pasta.it",
+        "raw_ocr_text": "Sample text",
+        "manufacturer_address": "Rome, Italy",
+        "quality_status": "ACCEPTABLE",
+        "extraction_confidence": "HIGH",
+        "country_of_origin": "Italy",
+        "importer_name": "Indo Italian Imports Pvt Ltd",
+        "unit_sale_price": "Rs. 0.50/g",
+        "font_size_mm": 2.2,
+        "expiry_date": "03/2028",
+    }
+
+    async def mock_extract(*args, **kwargs):
+        return mock_extracted
+
+    monkeypatch.setattr(ocr_client, "extract_fields", mock_extract)
+
+    jpeg_bytes = make_test_jpeg_bytes()
+    files = {"image": ("test_label.jpg", jpeg_bytes, "image/jpeg")}
+
+    # 1. POST /api/scan response contains new fields under extracted_fields
+    response = client.post("/api/scan", files=files, headers=headers)
+    assert response.status_code == 201
+    data = response.json()
+    scan_id = data["scan_id"]
+    extracted = data["extracted_fields"]
+    assert extracted["country_of_origin"] == "Italy"
+    assert extracted["importer_name"] == "Indo Italian Imports Pvt Ltd"
+    assert extracted["unit_sale_price"] == "Rs. 0.50/g"
+    assert extracted["font_size_mm"] == 2.2
+    assert extracted["expiry_date"] == "03/2028"
+
+    # 2. GET /api/scans response contains new fields under extracted_fields
+    list_response = client.get("/api/scans", headers=headers)
+    assert list_response.status_code == 200
+    scans = list_response.json()["scans"]
+    target_scan = next(s for s in scans if s["scan_id"] == scan_id)
+    assert target_scan["extracted_fields"]["country_of_origin"] == "Italy"
+    assert target_scan["extracted_fields"]["importer_name"] == "Indo Italian Imports Pvt Ltd"
+    assert target_scan["extracted_fields"]["unit_sale_price"] == "Rs. 0.50/g"
+    assert target_scan["extracted_fields"]["font_size_mm"] == 2.2
+    assert target_scan["extracted_fields"]["expiry_date"] == "03/2028"
+
+    # 3. GET /api/scans/{id} response contains new fields under extracted_fields
+    detail_response = client.get(f"/api/scans/{scan_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail_extracted = detail_response.json()["extracted_fields"]
+    assert detail_extracted["country_of_origin"] == "Italy"
+    assert detail_extracted["importer_name"] == "Indo Italian Imports Pvt Ltd"
+    assert detail_extracted["unit_sale_price"] == "Rs. 0.50/g"
+    assert detail_extracted["font_size_mm"] == 2.2
+    assert detail_extracted["expiry_date"] == "03/2028"
+
+
 

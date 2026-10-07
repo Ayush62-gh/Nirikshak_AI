@@ -70,6 +70,10 @@ class EvaluateProductRequest(BaseModel):
     expiryDate: Optional[str] = Field(None, description="Best before or expiry date declaration (e.g., Best Before 12 Months, 12/2027)")
     fontSizeMm: Optional[float] = Field(None, description="Extracted font size height in mm of mandatory declarations")
     principalDisplayAreaCm2: Optional[float] = Field(None, description="Principal Display Panel surface area in square centimeters")
+    declarationPlacement: Optional[str] = Field(None, description="Placement area text of mandatory declarations (e.g., 'PDP', 'Front Panel')")
+    isPDPPlacementValid: Optional[bool] = Field(None, description="Whether mandatory declarations are placed on the Principal Display Panel (Rule 6 & 7)")
+    contrastRatio: Optional[float] = Field(None, description="Extracted text-to-background contrast ratio score (Rule 8)")
+    isLegible: Optional[bool] = Field(None, description="Whether visual legibility/readability is verified (Rule 8)")
     fieldEvidence: Optional[Dict[str, RuleEvidence]] = Field(default_factory=dict, description="Optional metadata map connecting fields to RuleEvidence provenance")
 
     model_config = ConfigDict(

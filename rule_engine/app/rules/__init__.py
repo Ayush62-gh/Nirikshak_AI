@@ -11,6 +11,8 @@ from app.rules.country_of_origin_rule import CountryOfOriginRule
 from app.rules.unit_sale_price_rule import UnitSalePriceRule
 from app.rules.expiry_date_rule import ExpiryDateRule
 from app.rules.font_height_rule import FontHeightRule
+from app.rules.declaration_placement_rule import DeclarationPlacementRule
+from app.rules.readability_contrast_rule import ReadabilityContrastRule
 
 __all__ = [
     "RuleRegistry",
@@ -26,6 +28,8 @@ __all__ = [
     "UnitSalePriceRule",
     "ExpiryDateRule",
     "FontHeightRule",
+    "DeclarationPlacementRule",
+    "ReadabilityContrastRule",
 ]
 
 

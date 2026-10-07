@@ -14,11 +14,11 @@ from app.rules.base import RuleRegistry
 class FontHeightRule(AbstractRule):
     """
     Validates physical font height (in mm) of mandatory declarations on package labels.
-    Minimum font height prescribed under Rule 7 & Rule 9:
-    - Net Qty <= 50g/ml -> 1.0 mm minimum
-    - Net Qty 50g - 200g/ml -> 2.0 mm minimum
-    - Net Qty 200g - 1kg/L -> 4.0 mm minimum
-    - Net Qty > 1kg/L -> 6.0 mm minimum
+    Minimum font height prescribed under Rule 7 & Rule 9 [UNVERIFIED - VERIFY against official Rules text]:
+    - Net Qty <= 50g/ml -> 1.0 mm minimum [UNVERIFIED]
+    - Net Qty 50g - 200g/ml -> 2.0 mm minimum [UNVERIFIED]
+    - Net Qty 200g - 1kg/L -> 4.0 mm minimum [UNVERIFIED]
+    - Net Qty > 1kg/L -> 6.0 mm minimum [UNVERIFIED]
     """
 
     @property
@@ -51,6 +51,7 @@ class FontHeightRule(AbstractRule):
             return True
         return False
 
+    # TODO: Implement dynamic font height thresholds based on package net-quantity / principal display area from official Rules table [VERIFY against official Rules text]
     def validate(self, product: EvaluateProductRequest) -> IndividualRuleResult:
         font_size = product.fontSizeMm
 

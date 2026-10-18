@@ -1,8 +1,9 @@
 """
 Legal Metrology Compliance Rule: Manufacturer or Packer Address Declaration Rule.
-Statutory Provision: Rule 6(1)(a), Legal Metrology (Packaged Commodities) Rules, 2011.
+Statutory Provision: Rule 6(1)(a) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
 """
 
+import re
 from typing import Optional
 from app.core.interface import AbstractRule
 from app.models.product import EvaluateProductRequest
@@ -14,8 +15,13 @@ from app.rules.base import RuleRegistry
 class ManufacturerAddressRule(AbstractRule):
     """
     Validates declaration of Manufacturer or Packer complete address.
-    Legal Reference: Rule 6(1)(a), Legal Metrology (Packaged Commodities) Rules, 2011.
+    Legal Reference: Rule 6(1)(a) [VERIFY against official Rules text], Legal Metrology (Packaged Commodities) Rules, 2011.
+    
+    Known Limitation: 6-digit numbers in address text (such as batch or licence numbers) may be incorrectly matched as postal pincodes.
     """
+
+    # Indian 6-digit postal pincode pattern (supports optional space, e.g. "201301" or "400 001")
+    PINCODE_PATTERN = re.compile(r'\b[1-9]\d{2}\s?\d{3}\b')
 
     @property
     def rule_id(self) -> str:
@@ -35,8 +41,7 @@ class ManufacturerAddressRule(AbstractRule):
 
     @property
     def remediation_hint(self) -> Optional[str]:
-
-        return "Declare complete address of Manufacturer/Packer (premises, city, state, pincode) on package label."
+        return "Declare complete address of Manufacturer/Packer (premises, city, state, 6-digit pincode) on package label."
 
     def is_applicable(self, product: EvaluateProductRequest) -> bool:
         """
@@ -63,12 +68,22 @@ class ManufacturerAddressRule(AbstractRule):
 
         addr_text = product.manufacturerAddress.strip()
 
-        # Case 2: Structured address declaration present
+        # Case 2: Check 6-digit pincode in address
+        if self.PINCODE_PATTERN.search(addr_text):
+            return IndividualRuleResult(
+                ruleId=self.rule_id,
+                ruleName=self.rule_name,
+                status=RuleStatus.PASS,
+                severity=self.severity,
+                message="Manufacturer or Packer address text is present with 6-digit pincode."
+            )
+
+        # Case 3: Address present but missing 6-digit pincode -> MANUAL_REVIEW
         return IndividualRuleResult(
             ruleId=self.rule_id,
             ruleName=self.rule_name,
-            status=RuleStatus.PASS,
-            severity=self.severity,
-            message="Manufacturer or Packer address text is present in structured payload."
+            status=RuleStatus.MANUAL_REVIEW,
+            severity=RuleSeverity.MEDIUM,
+            message="Manufacturer or Packer address text is present, but missing 6-digit pincode; manual verification required."
         )
 

@@ -18,6 +18,10 @@ class UnitSalePriceRule(AbstractRule):
     Mandatory for packages containing > 1 g/ml or > 1 unit as per Rule 6(11).
     """
 
+    # TEMPORARY CONSERVATIVE CHOICE: Missing USP on packages with netQuantity present defaults to MANUAL_REVIEW
+    # until the exact statutory applicability conditions and threshold logic under Rule 6(11) are officially verified.
+    MISSING_USP_DEFAULT_STATUS = RuleStatus.MANUAL_REVIEW
+
     # Patterns matching Unit Sale Price declarations (e.g., "Rs 0.50/g", "Rs. 200 / kg", "₹1.50/ml", "₹10 per N", "Unit Price: Rs 5.00/g")
     USP_PATTERNS = [
         re.compile(r'(?:₹|rs\.?|inr)\s*\d+(?:\.\d+)?\s*(?:/|per)\s*(?:g|gram|kg|kilogram|ml|l|liter|litre|m|cm|n|unit|piece)', re.IGNORECASE),
@@ -53,11 +57,14 @@ class UnitSalePriceRule(AbstractRule):
         """
         Applicability:
         - Applicable if unitSalePrice is provided OR if USP pattern is detected inside mrp.
-        - Returns False (NOT_APPLICABLE) when unitSalePrice data is not supplied in request payload.
+        - Applicable if netQuantity is provided with numeric quantity (package potentially requiring USP under Rule 6(11)).
+        - Returns False (NOT_APPLICABLE) when neither USP nor netQuantity is supplied in request payload.
         """
         if product.unitSalePrice and product.unitSalePrice.strip():
             return True
         if product.mrp and self._has_usp_in_mrp(product.mrp):
+            return True
+        if product.netQuantity and re.search(r'\d', product.netQuantity):
             return True
         return False
 
@@ -97,10 +104,22 @@ class UnitSalePriceRule(AbstractRule):
                         message=f"Unit Sale Price detected in price snippet: '{match.group(0)}'."
                     )
 
+        # USP is missing, but netQuantity is present.
+        # TODO: Verify exact Rule 6(11) statutory mandatory thresholds (packages > 1g/1ml or > 1 unit) [VERIFY against official Rules text]
+        if product.netQuantity and product.netQuantity.strip():
+            return IndividualRuleResult(
+                ruleId=self.rule_id,
+                ruleName=self.rule_name,
+                status=self.MISSING_USP_DEFAULT_STATUS,
+                severity=RuleSeverity.MEDIUM,
+                message="Unit Sale Price declaration is missing; manual verification required to check applicability under Rule 6(11)."
+            )
+
+        # Defensive fallback: unreachable via engine since is_applicable() returns False in this case.
         return IndividualRuleResult(
             ruleId=self.rule_id,
             ruleName=self.rule_name,
-            status=RuleStatus.FAIL,
-            severity=self.severity,
-            message="Mandatory Unit Sale Price (USP) declaration is missing on retail package label."
+            status=self.MISSING_USP_DEFAULT_STATUS,
+            severity=RuleSeverity.LOW,
+            message="Unit Sale Price declaration is missing and net quantity is unprovided."
         )

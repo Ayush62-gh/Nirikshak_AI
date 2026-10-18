@@ -83,12 +83,13 @@ def test_engine_status_precedence_all_cases():
         "productName": "Tea",
         "isImported": False,
         "manufacturerName": "Maker",
-        "manufacturerAddress": "Addr",
+        "manufacturerAddress": "Addr - 110001",
         "netQuantity": "100 g",
         "mrp": "Rs. 100 (incl. of all taxes)",
         "monthOfPacking": "08",
         "yearOfPacking": "2026",
-        "consumerCare": "care@maker.com"
+        "consumerCare": "care@maker.com",
+        "unitSalePrice": "Rs 1.00/g"
     }
     r_pass = client.post("/api/rules/evaluate", json=payload_pass).json()
     assert r_pass["overallStatus"] == "PASS"

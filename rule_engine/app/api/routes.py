@@ -49,15 +49,16 @@ async def check_compliance_v1(
     "/api/rules/evaluate",
     response_model=EvaluateComplianceResponse,
     status_code=status.HTTP_200_OK,
-    tags=["Teammates API Contract (Legacy Alias)"]
+    tags=["Teammates API Contract (Legacy Alias)"],
+    deprecated=True
 )
 async def evaluate_rules_contract(
     request: EvaluateProductRequest,
     engine: RuleEngine = Depends(get_rule_engine)
 ) -> EvaluateComplianceResponse:
     """
-    Teammate Backend API Contract Endpoint for Legal Metrology Rule Engine evaluation.
-    Maintained for backward compatibility. Delegation target for /api/v1/compliance/check.
+    [DEPRECATED] Teammate Backend API Contract Endpoint for Legal Metrology Rule Engine evaluation.
+    Maintained for backward compatibility. Canonical endpoint is /api/v1/compliance/check.
     """
     return engine.evaluate(request)
 
@@ -66,13 +67,15 @@ async def evaluate_rules_contract(
     "/api/v1/compliance/evaluate",
     response_model=ComplianceReport,
     status_code=status.HTTP_200_OK,
-    tags=["Internal Legacy Evaluation"]
+    tags=["Internal Legacy Evaluation"],
+    deprecated=True
 )
 async def evaluate_compliance_legacy(
     product: ProductData,
     engine: RuleEngine = Depends(get_rule_engine)
 ) -> ComplianceReport:
     """
-    Evaluates structured product data against Legal Metrology Compliance Rules (Internal legacy route).
+    [DEPRECATED] Evaluates structured product data against Legal Metrology Compliance Rules (Internal legacy route).
+    Canonical endpoint is /api/v1/compliance/check.
     """
     return engine.evaluate_product(product)
